@@ -50,13 +50,31 @@ def cli(ctx, config, profile):
 @click.argument('prompt_file', required=False)
 @click.option('--speed', '-s', type=click.Choice(['fast', 'normal', 'careful']), 
               default='normal', help='Build speed profile')
+@click.option('--agents', '-a', type=int, default=1, 
+              help='Number of agents to run (1-20)')
+@click.option('--mode', '-m', type=click.Choice(['sequential', 'parallel', 'collaborative', 'distributed', 'hybrid']), 
+              default='sequential', help='Execution mode for multi-agent runs')
 @click.option('--resume', '-r', type=str, help='Resume a previous session')
 @click.option('--dry-run', is_flag=True, help='Validate prompt without starting build')
 @click.pass_context
-def start(ctx, prompt_file, speed, resume, dry_run):
+def start(ctx, prompt_file, speed, agents, mode, resume, dry_run):
     """Start a new sync session"""
     config = ctx.obj['config']
     config.apply_profile(speed)
+    
+    # Validate agent count
+    if agents < 1 or agents > 20:
+        click.echo("Error: Number of agents must be between 1 and 20", err=True)
+        sys.exit(1)
+    
+    # If multiple agents requested but mode is sequential, warn user
+    if agents > 1 and mode == 'sequential':
+        click.echo("Warning: Sequential mode with multiple agents will run agents one at a time")
+    
+    # Store multi-agent settings in config
+    config.set('multi_agent_enabled', agents > 1)
+    config.set('num_agents', agents)
+    config.set('execution_mode', mode)
     
     # Initialize managers
     session_manager = SessionManager(config)
@@ -93,21 +111,33 @@ def start(ctx, prompt_file, speed, resume, dry_run):
         click.echo(f"Project: {prompt.name}")
         click.echo(f"Steps: {len(prompt.steps)}")
         click.echo(f"Speed: {speed}")
+        if agents > 1:
+            click.echo(f"Agents: {agents}")
+            click.echo(f"Mode: {mode}")
         
         # Start orchestrator
         orchestrator = XenosyncOrchestrator(config, session_manager, prompt_manager)
         
         # Run the build
-        asyncio.run(orchestrator.run(session, prompt))
+        try:
+            asyncio.run(orchestrator.run(session, prompt))
+        except KeyboardInterrupt:
+            # Handle interrupt gracefully
+            click.echo("\n\n" + "=" * 60)
+            click.echo("Shutting down agents...")
+            orchestrator.interrupt()
+            click.echo("=" * 60)
         
     except KeyboardInterrupt:
-        click.echo("\nBuild interrupted by user")
+        click.echo("\n\nBuild interrupted by user")
         if 'session' in locals():
-            session_manager.archive_session(session.id, status='interrupted')
+            from xenosync.session_manager import SessionStatus
+            session_manager.update_session_status(session.id, SessionStatus.INTERRUPTED)
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         if 'session' in locals():
-            session_manager.archive_session(session.id, status='failed')
+            from xenosync.session_manager import SessionStatus
+            session_manager.update_session_status(session.id, SessionStatus.FAILED)
         sys.exit(1)
 
 
@@ -154,13 +184,46 @@ def monitor(ctx, port, host):
 
 
 @cli.command()
-@click.argument('session_id')
+@click.argument('session_id', required=False)
+@click.option('--hive', is_flag=True, help='Attach to multi-agent hive session')
 @click.pass_context
-def attach(ctx, session_id):
-    """Attach to a running sync session"""
-    config = ctx.obj['config']
-    session_manager = SessionManager(config)
+def attach(ctx, session_id, hive):
+    """Attach to a running sync session
     
+    Use --hive to attach to the multi-agent tmux session
+    """
+    config = ctx.obj['config']
+    
+    if hive:
+        # Attach to multi-agent hive session
+        import subprocess
+        if subprocess.run(['which', 'tmux'], capture_output=True).returncode == 0:
+            # Check for xenosync hive sessions
+            result = subprocess.run(['tmux', 'list-sessions'], capture_output=True, text=True)
+            if result.returncode == 0:
+                # Look for xenosync-hive or xenosync_collective sessions
+                hive_sessions = [s for s in result.stdout.splitlines() 
+                               if 'xenosync' in s.lower() and ('hive' in s or 'collective' in s)]
+                if hive_sessions:
+                    # Get the most recent hive session
+                    session_name = hive_sessions[0].split(':')[0]
+                    click.echo(f"Attaching to hive session: {session_name}")
+                    click.echo("Navigation: Ctrl+B,1 for agents | Ctrl+B,d to detach")
+                    subprocess.run(['tmux', 'attach-session', '-t', session_name])
+                else:
+                    click.echo("No active hive sessions found", err=True)
+                    click.echo("Start a multi-agent session with: xenosync start <prompt> --agents N")
+            else:
+                click.echo("No tmux sessions found", err=True)
+        else:
+            click.echo("tmux not available", err=True)
+        return
+    
+    if not session_id:
+        click.echo("Please provide a session ID or use --hive for multi-agent sessions", err=True)
+        return
+    
+    session_manager = SessionManager(config)
     session = session_manager.get_session(session_id)
     if not session or session.status != 'active':
         click.echo(f"No active session found: {session_id}", err=True)
@@ -310,6 +373,31 @@ def prompt_convert(ctx, input_file, output_file):
     except Exception as e:
         click.echo(f"Conversion failed: {e}", err=True)
         sys.exit(1)
+
+
+@cli.command()
+@click.argument('agent_id', type=int)
+@click.option('--session', '-s', help='Session ID to find agent in')
+@click.pass_context
+def recover(ctx, agent_id, session):
+    """Force recovery attempt for a stuck agent
+    
+    Use this command to manually trigger error recovery for an agent
+    that appears to be stuck with API errors.
+    """
+    config = ctx.obj['config']
+    
+    click.echo(f"🔄 Manual recovery requested for agent {agent_id}")
+    if session:
+        click.echo(f"Session: {session}")
+    
+    click.echo("\nTo use this feature:")
+    click.echo("1. Attach to the hive session: xenosync attach --hive")
+    click.echo("2. Identify stuck agents by monitoring their output")
+    click.echo("3. The system will automatically attempt recovery")
+    click.echo("\nFor immediate help:")
+    click.echo("- Send '--continue' to the agent manually in tmux")
+    click.echo("- Or send 'Please retry and continue with your work'")
 
 
 @cli.command()

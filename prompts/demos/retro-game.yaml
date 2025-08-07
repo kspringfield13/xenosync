@@ -1,131 +1,193 @@
-name: Retro Multiplayer Snake Game
-description: Build a classic Snake game with modern multiplayer capabilities and retro aesthetics
+name: Retro Pac-Man Style Arcade Game
+description: Build a classic Pac-Man inspired arcade game with modern web technologies and retro aesthetics
 
 initial_prompt: |
-  You are building a multiplayer Snake game with a retro 8-bit aesthetic. This is a collaborative effort where multiple agents work together on different components of the game.
+  You are building a Pac-Man style arcade game with authentic retro 8-bit aesthetics. This is a single-player maze navigation game where the player collects dots while avoiding ghosts.
   
   The game should feature:
-  - Classic Snake gameplay with smooth controls
-  - Local multiplayer support (2-4 players)
-  - Retro 8-bit visual style with pixel art
-  - Sound effects and background music
-  - High score tracking with leaderboard
-  - Power-ups and obstacles for variety
-  - Responsive design that works on desktop and mobile
+  - Classic maze gameplay with dot collection
+  - Four unique ghosts with different AI behaviors
+  - Power pellets that turn the tables on ghosts
+  - Smooth grid-based movement and animations
+  - Progressive difficulty with multiple levels
+  - Bonus fruits for extra points
+  - Lives system and high score tracking
+  - Authentic arcade sound effects and visuals
   
   Technology Stack:
   - HTML5 Canvas for rendering
   - JavaScript/TypeScript for game logic
-  - CSS for retro styling
-  - LocalStorage for high scores
-  - Web Audio API for sound
+  - CSS for retro arcade cabinet styling
+  - LocalStorage for high scores and progress
+  - Web Audio API for classic arcade sounds
   
-  Before starting, analyze the project structure and coordinate with other agents on the component interfaces.
+  Focus on creating an authentic arcade experience with smooth gameplay, intelligent ghost AI, and satisfying game feel.
 
 metadata:
-  recommended_agents: 4
+  recommended_agents: 3
   recommended_mode: parallel
-  estimated_time: 25
+  estimated_time: 30
   difficulty: intermediate
-  tags: [game, multiplayer, canvas, javascript, retro]
+  tags: [game, arcade, pacman, canvas, javascript, retro, ai]
 
 steps:
   - content: Set up the project structure and game framework
     description: |
       Create the foundational HTML5 game structure:
-      - index.html with canvas element and retro UI
-      - CSS with 8-bit fonts and pixel-perfect styling
+      - index.html with canvas element and arcade cabinet styling
+      - CSS with retro arcade fonts and neon colors
       - Main game loop with requestAnimationFrame
-      - Asset loading system for sprites and sounds
-      - Configuration for game settings
+      - Asset manager for sprites, sounds, and maze data
+      - Game configuration and constants file
+      - Basic file structure (js/, css/, assets/, sounds/)
     
-  - content: Implement core Snake game mechanics
+  - content: Implement maze generation and rendering system
     description: |
-      Build the essential Snake gameplay:
-      - Snake movement with smooth grid-based animation
-      - Food spawning system with collision detection
-      - Snake growth mechanism when eating food
-      - Self-collision detection for game over
-      - Wrap-around or wall collision options
-      - Speed increase as snake grows
+      Build the maze infrastructure:
+      - Create maze data structure (2D array or tile system)
+      - Design classic Pac-Man style maze layout
+      - Implement maze rendering with walls and paths
+      - Add dot and power pellet placement logic
+      - Create tunnel/warp zones on maze edges
+      - Include ghost house in center of maze
+      - Optimize rendering for performance
     
-  - content: Create the rendering and visual effects system
+  - content: Create the player character (Pac-Man) mechanics
     description: |
-      Develop the retro visual presentation:
-      - Pixel art sprites for snake segments, food, and power-ups
-      - 8-bit color palette with CRT screen effect
-      - Particle effects for eating food and collisions
-      - Smooth animations between grid positions
-      - Retro UI elements (score display, lives, game over screen)
-      - Screen shake and visual feedback effects
+      Develop the main character controls and behavior:
+      - Grid-based movement with smooth animations
+      - Keyboard controls (arrow keys and WASD)
+      - Collision detection with walls
+      - Dot and power pellet collection
+      - Animated sprite with directional facing
+      - Movement queuing for smoother control
+      - Death animation and respawn logic
     
-  - content: Build the multiplayer system
+  - content: Implement dot collection and scoring system
     description: |
-      Implement local multiplayer features:
-      - Support for 2-4 players on same screen
-      - Different control schemes (WASD, arrows, IJKL, numpad)
-      - Split-screen or shared arena modes
-      - Collision between different snakes
-      - Competitive scoring system
-      - Player colors and customization
+      Create the core collection mechanics:
+      - Regular dots worth 10 points
+      - Power pellets worth 50 points
+      - Dot counter for level completion
+      - Combo system for eating ghosts
+      - Bonus fruit spawning (cherry, strawberry, orange)
+      - Score display with retro font
+      - High score tracking and display
+      - Point popup animations
     
-  - content: Add power-ups and special features
+  - content: Build ghost AI with unique behaviors
     description: |
-      Create variety with special items:
-      - Speed boost/slow power-ups
-      - Invincibility temporary effect
-      - Score multipliers
-      - Shrink power-up to reduce snake length
-      - Ghost mode to pass through walls
-      - Random obstacle generation
-      - Special golden food for bonus points
+      Implement the four classic ghost personalities:
+      - Blinky (red): Direct chase behavior
+      - Pinky (pink): Ambush by targeting ahead of player
+      - Inky (cyan): Unpredictable, uses Blinky's position
+      - Clyde (orange): Chase when far, scatter when close
+      - Scatter mode where ghosts patrol corners
+      - Chase mode with increasing aggression
+      - Frightened mode when power pellet eaten
+      - Pathfinding algorithm (A* or simplified)
+      - Ghost house exit logic and timing
     
-  - content: Implement audio and music system
+  - content: Create power-up and ghost vulnerability system
     description: |
-      Create retro sound experience:
-      - 8-bit sound effects using Web Audio API
-      - Eating food beeps and boops
-      - Background chiptune music tracks
-      - Level up and achievement sounds
-      - Game over and victory jingles
-      - Volume controls and mute options
+      Implement power pellet mechanics:
+      - Timer-based ghost vulnerability
+      - Blue/white flashing frightened ghosts
+      - Reversed ghost movement when frightened
+      - Points for eating ghosts (200, 400, 800, 1600)
+      - Ghost eyes returning to house after eaten
+      - Power-up duration decreases with level
+      - Warning flash before power-up ends
+      - Sound cues for power-up state
     
-  - content: Create menu and UI systems
+  - content: Develop visual effects and animations
     description: |
-      Build user interface components:
-      - Animated main menu with retro styling
-      - Player selection and game mode screens
-      - Pause menu with resume/restart options
-      - Settings for difficulty and game options
-      - High score leaderboard display
-      - Game over screen with stats
+      Create the retro arcade presentation:
+      - Pixel-perfect sprite animations
+      - Classic arcade color palette
+      - Smooth movement interpolation
+      - Death animations for Pac-Man
+      - Ghost animation states (normal, frightened, eyes)
+      - Particle effects for dot collection
+      - Screen flash effects for power-ups
+      - Arcade CRT screen effect overlay
+      - Attract mode demo when idle
     
-  - content: Implement scoring and progression system
+  - content: Implement audio and sound effects system
     description: |
-      Add competitive elements:
-      - Point system based on food eaten and survival time
-      - Combo multipliers for quick successive eating
-      - Level progression with increasing difficulty
-      - Achievement system with unlockables
-      - LocalStorage for persistent high scores
-      - Statistics tracking (games played, total score, etc.)
+      Create authentic arcade audio:
+      - Classic wakka-wakka eating sound
+      - Ghost siren that increases with tension
+      - Power pellet activation sound
+      - Ghost eaten chomping sound
+      - Death jingle for losing a life
+      - Level complete fanfare
+      - Bonus fruit collection sounds
+      - Retro intro music
+      - Volume controls and mute option
     
-  - content: Add mobile and responsive support
+  - content: Build game states and UI systems
     description: |
-      Ensure cross-device compatibility:
-      - Touch controls for mobile devices
-      - Swipe gestures for snake direction
-      - Responsive canvas scaling
-      - Virtual gamepad for mobile multiplayer
-      - Orientation detection and adjustment
-      - Performance optimization for mobile
+      Create game flow and interface:
+      - Start screen with arcade attract mode
+      - Ready message before level start
+      - Pause functionality
+      - Game over screen with final score
+      - Level transitions with brief intermission
+      - Lives display (3 lives to start)
+      - Current level indicator
+      - Settings menu for difficulty
+      - Instructions/how to play screen
+      - Credits screen
     
-  - content: Polish and game feel improvements
+  - content: Create comprehensive game documentation
     description: |
-      Final touches for professional quality:
-      - Smooth transitions between game states
-      - Easter eggs and secret features
-      - Debug mode for testing
-      - Performance profiling and optimization
-      - Cross-browser compatibility testing
-      - Final bug fixes and balancing
+      Generate a detailed GAME_README.md file that includes:
+      
+      # Installation & Setup
+      - Prerequisites and dependencies
+      - How to download/clone the game
+      - Running locally (python -m http.server, live-server, etc.)
+      - Browser compatibility notes
+      
+      # How to Play
+      - Game controls (Arrow keys/WASD)
+      - Objective and win conditions
+      - Scoring system explanation
+      - Ghost behaviors and strategies
+      - Power-up mechanics
+      - Level progression
+      
+      # Customization Guide
+      - Modifying maze layouts (maze editor tips)
+      - Adjusting difficulty settings
+      - Changing ghost AI parameters
+      - Customizing sprites and colors
+      - Adding new sound effects
+      - Creating custom levels
+      
+      # Code Structure
+      - File organization overview
+      - Key classes: Game, Player, Ghost, Maze
+      - Game loop explanation
+      - AI algorithm details
+      - Collision detection system
+      
+      # Enhancement Ideas
+      - Add two-player mode
+      - Create online leaderboards
+      - Implement save states
+      - Add new ghost types
+      - Create bonus stages
+      - Mobile touch controls
+      - Level editor tool
+      - Multiplayer networking
+      - Achievement system
+      - Custom maze generator
+      
+      # Troubleshooting
+      - Common issues and fixes
+      - Performance optimization tips
+      - Debug mode instructions
+      
+      Make this documentation user-friendly and comprehensive!

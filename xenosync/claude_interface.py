@@ -28,15 +28,30 @@ class ClaudeInterface:
         # Tmux integration if enabled
         self.use_tmux = config.use_tmux
         self.tmux_session = None
-        self.tmux_window = 1  # Claude window
+        
+        # Tmux pane mode for multi-agent
+        self.tmux_pane_mode = False
+        self.tmux_shared_session = None
+        self.tmux_pane_id = None
+    
+    def set_tmux_pane_mode(self, session_name: str, pane_id: int):
+        """Configure to use a specific tmux pane in a shared session"""
+        self.tmux_pane_mode = True
+        self.tmux_shared_session = session_name
+        self.tmux_pane_id = pane_id
     
     async def start(self, session_id: str):
         """Start Claude CLI session"""
         self.session_id = session_id
         
-        if self.use_tmux:
+        if self.tmux_pane_mode:
+            # Use existing tmux pane in shared session
+            await self._start_in_tmux_pane()
+        elif self.use_tmux:
+            # Create separate tmux session
             await self._start_tmux_session()
         else:
+            # Start directly without tmux
             await self._start_direct_session()
         
         # Wait for Claude to initialize
@@ -44,10 +59,41 @@ class ClaudeInterface:
         
         logger.info(f"Claude session started for {session_id}")
     
+    async def _start_in_tmux_pane(self):
+        """Start Claude in a specific tmux pane (multi-agent mode)"""
+        # Target pane in shared session
+        target_pane = f"{self.tmux_shared_session}:agents.{self.tmux_pane_id}"
+        
+        # Start Claude in the pane
+        claude_cmd = ' '.join(self.config.claude_command)
+        
+        # Send command to the specific pane
+        send_cmd = [
+            'tmux', 'send-keys', '-t', target_pane,
+            claude_cmd, 'Enter'
+        ]
+        await self._run_command(send_cmd)
+        
+        # Store pane reference for later use
+        self.tmux_session = self.tmux_shared_session
+        self.tmux_window = f"agents.{self.tmux_pane_id}"
+        
+        logger.info(f"Started Claude in pane {self.tmux_pane_id} of session {self.tmux_shared_session}")
+    
     async def _start_tmux_session(self):
         """Start Claude in a tmux session"""
-        short_id = self.session_id[:8]
-        self.tmux_session = f"xsync-{short_id}"
+        # For multi-agent, session_id includes agent suffix, use full ID for uniqueness
+        # Truncate if too long for tmux session name (max ~80 chars)
+        if '_agent_' in self.session_id:
+            # Multi-agent mode: use shortened base + agent number
+            parts = self.session_id.split('_agent_')
+            short_base = parts[0][:8]
+            agent_num = parts[1] if len(parts) > 1 else '0'
+            self.tmux_session = f"xsync-{short_base}-a{agent_num}"
+        else:
+            # Single agent mode: use first 8 chars
+            short_id = self.session_id[:8]
+            self.tmux_session = f"xsync-{short_id}"
         
         # Create tmux session
         create_cmd = [
@@ -119,8 +165,14 @@ class ClaudeInterface:
         # Escape special characters
         escaped_message = message.replace('"', '\\"').replace('\n', ' ')
         
+        # Determine target based on mode
+        if self.tmux_pane_mode:
+            target = f"{self.tmux_session}:{self.tmux_window}"
+        else:
+            target = f"{self.tmux_session}:{self.tmux_window}"
+        
         send_cmd = [
-            'tmux', 'send-keys', '-t', f"{self.tmux_session}:{self.tmux_window}",
+            'tmux', 'send-keys', '-t', target,
             f'"{escaped_message}"'
         ]
         await self._run_command(send_cmd)
@@ -130,7 +182,7 @@ class ClaudeInterface:
         
         # Send Enter
         enter_cmd = [
-            'tmux', 'send-keys', '-t', f"{self.tmux_session}:{self.tmux_window}",
+            'tmux', 'send-keys', '-t', target,
             'Enter'
         ]
         await self._run_command(enter_cmd)
@@ -152,8 +204,14 @@ class ClaudeInterface:
     
     async def _get_tmux_output(self, lines: int, offset: int) -> str:
         """Get output from tmux pane"""
+        # Determine target based on mode
+        if self.tmux_pane_mode:
+            target = f"{self.tmux_session}:{self.tmux_window}"
+        else:
+            target = f"{self.tmux_session}:{self.tmux_window}"
+        
         cmd = [
-            'tmux', 'capture-pane', '-t', f"{self.tmux_session}:{self.tmux_window}",
+            'tmux', 'capture-pane', '-t', target,
             '-p', '-S', f"-{lines + offset}", '-E', f"-{offset}"
         ]
         
@@ -185,8 +243,22 @@ class ClaudeInterface:
     
     async def stop(self):
         """Stop Claude session"""
-        if self.use_tmux and self.tmux_session:
-            # Kill tmux session
+        if self.tmux_pane_mode:
+            # In pane mode, just send exit command but don't kill the pane
+            # The tmux session is managed by TmuxManager
+            target = f"{self.tmux_session}:{self.tmux_window}"
+            try:
+                # Send Ctrl+C to stop current command
+                cmd = ['tmux', 'send-keys', '-t', target, 'C-c']
+                await self._run_command(cmd)
+                await asyncio.sleep(0.5)
+                # Send exit command
+                cmd = ['tmux', 'send-keys', '-t', target, 'exit', 'Enter']
+                await self._run_command(cmd)
+            except subprocess.CalledProcessError:
+                pass  # Pane might already be gone
+        elif self.use_tmux and self.tmux_session:
+            # Kill tmux session (single agent mode)
             cmd = ['tmux', 'kill-session', '-t', self.tmux_session]
             try:
                 await self._run_command(cmd)

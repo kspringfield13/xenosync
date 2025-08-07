@@ -14,6 +14,13 @@ from .session_manager import SessionManager, Session, SessionStatus
 from .prompt_manager import PromptManager, SyncPrompt
 from .claude_interface import ClaudeInterface
 from .exceptions import SyncError, SyncInterrupted
+from .agent_manager import AgentManager
+from .coordination import CoordinationManager
+from .tmux_manager import TmuxManager
+from .execution_strategies import (
+    ExecutionMode, ExecutionStrategy, SequentialStrategy,
+    ParallelStrategy, CollaborativeStrategy, DistributedStrategy, HybridStrategy
+)
 
 
 logger = logging.getLogger(__name__)
@@ -29,6 +36,27 @@ class XenosyncOrchestrator:
         self.prompt_manager = prompt_manager
         self.claude = ClaudeInterface(config)
         
+        # Multi-agent support
+        self.multi_agent_enabled = config.get('multi_agent_enabled', False)
+        self.num_agents = config.get('num_agents', 1)
+        self.execution_mode = config.get('execution_mode', 'sequential')
+        
+        # Initialize multi-agent components if needed
+        if self.multi_agent_enabled:
+            self.agent_manager = AgentManager(config, num_agents=self.num_agents)
+            self.coordination = CoordinationManager(config)
+            self.strategy = self._get_execution_strategy()
+            # Initialize TmuxManager for visual monitoring if enabled
+            if config.get('use_tmux', True):
+                self.tmux_manager = TmuxManager(f"xenosync-hive")
+            else:
+                self.tmux_manager = None
+        else:
+            self.agent_manager = None
+            self.coordination = None
+            self.strategy = None
+            self.tmux_manager = None
+        
         # State tracking
         self.current_session: Optional[Session] = None
         self.current_prompt: Optional[SyncPrompt] = None
@@ -41,6 +69,19 @@ class XenosyncOrchestrator:
         self.running = False
         self.interrupted = False
     
+    def _get_execution_strategy(self) -> ExecutionStrategy:
+        """Get the appropriate execution strategy based on mode"""
+        mode_map = {
+            'sequential': SequentialStrategy,
+            'parallel': ParallelStrategy,
+            'collaborative': CollaborativeStrategy,
+            'distributed': DistributedStrategy,
+            'hybrid': HybridStrategy
+        }
+        
+        strategy_class = mode_map.get(self.execution_mode, SequentialStrategy)
+        return strategy_class(self.agent_manager, self.coordination)
+    
     async def run(self, session: Session, prompt: SyncPrompt):
         """Run a sync session"""
         self.current_session = session
@@ -50,18 +91,13 @@ class XenosyncOrchestrator:
         try:
             logger.info(f"Starting sync session: {session.id}")
             
-            # Initialize Claude
-            await self.claude.start(session.id)
-            
-            # Send initial prompt
-            await self._send_initial_prompt()
-            
-            # Wait for TODO list creation if configured
-            if self.config.get('wait_for_todo', True):
-                await self._wait_for_todo_list()
-            
-            # Main orchestration loop
-            await self._orchestration_loop()
+            # Check if multi-agent mode
+            if self.multi_agent_enabled:
+                logger.info(f"Starting multi-agent execution with {self.num_agents} agents in {self.execution_mode} mode")
+                await self._run_multi_agent(session, prompt)
+            else:
+                # Single agent mode (traditional)
+                await self._run_single_agent(session, prompt)
             
             # Mark session as completed
             self.session_manager.update_session_status(
@@ -81,7 +117,54 @@ class XenosyncOrchestrator:
             raise
         finally:
             self.running = False
-            await self.claude.stop()
+            if self.multi_agent_enabled and self.agent_manager:
+                # Only force exit if interrupted, otherwise keep agents running
+                force_exit = self.interrupted
+                await self.agent_manager.shutdown(force_exit=force_exit)
+                
+                # Clean up tmux session if forced
+                if force_exit and self.tmux_manager:
+                    self.tmux_manager.kill_session()
+            else:
+                await self.claude.stop()
+    
+    async def _run_single_agent(self, session: Session, prompt: SyncPrompt):
+        """Run traditional single-agent execution"""
+        # Initialize Claude
+        await self.claude.start(session.id)
+        
+        # Send initial prompt
+        await self._send_initial_prompt()
+        
+        # Wait for TODO list creation if configured
+        if self.config.get('wait_for_todo', True):
+            await self._wait_for_todo_list()
+        
+        # Main orchestration loop
+        await self._orchestration_loop()
+    
+    async def _run_multi_agent(self, session: Session, prompt: SyncPrompt):
+        """Run multi-agent execution using selected strategy"""
+        # Create tmux session for visual monitoring if available
+        if self.tmux_manager and self.tmux_manager.is_tmux_available():
+            logger.info(f"Creating tmux session for {self.num_agents} agents")
+            self.tmux_manager.create_session(self.num_agents)
+            # Pass tmux manager to agent manager
+            self.agent_manager.set_tmux_manager(self.tmux_manager)
+        
+        # Initialize agents
+        await self.agent_manager.initialize_agents(session.id)
+        
+        # No need to initialize coordination - it uses session_id in each method call
+        
+        # Execute using the selected strategy
+        success = await self.strategy.execute(prompt, session.id)
+        
+        if not success:
+            raise SyncError("Multi-agent execution failed")
+        
+        # Enter monitoring mode - keep agents alive
+        await self._monitor_agents(session)
     
     async def _send_initial_prompt(self):
         """Send the initial build prompt to Claude"""
@@ -417,6 +500,43 @@ class XenosyncOrchestrator:
         logger.info(f"Next step no earlier than {next_step_time.strftime('%H:%M:%S')}")
         
         return True
+    
+    async def _monitor_agents(self, session: Session):
+        """Monitor running agents without stopping them"""
+        logger.info("=" * 60)
+        logger.info("AGENTS COMPLETED INITIAL EXECUTION")
+        logger.info("=" * 60)
+        
+        if self.tmux_manager:
+            logger.info(f"✓ Agents are still running in tmux session: {self.tmux_manager.session}")
+            logger.info(f"")
+            logger.info(f"To view agents working:")
+            logger.info(f"  tmux attach -t {self.tmux_manager.session}")
+            logger.info(f"")
+            logger.info(f"Navigation in tmux:")
+            logger.info(f"  • Ctrl+B, 1  = Switch to agents window")
+            logger.info(f"  • Ctrl+B, d  = Detach from tmux")
+            logger.info(f"  • Ctrl+B, [  = Scroll mode (q to exit)")
+            logger.info(f"")
+        
+        logger.info("Press Ctrl+C to shutdown agents and exit")
+        logger.info("=" * 60)
+        
+        # Monitor loop - just keep alive
+        try:
+            while not self.interrupted:
+                # Get agent metrics periodically
+                if self.agent_manager:
+                    metrics = self.agent_manager.get_agent_metrics()
+                    active = sum(1 for a in metrics['agents'] if a['status'] != 'stopped')
+                    if active > 0 and int(time.time()) % 60 == 0:  # Log every minute
+                        logger.debug(f"Active agents: {active}, Summary: {metrics['summary']}")
+                
+                await asyncio.sleep(5)
+                
+        except KeyboardInterrupt:
+            logger.info("\nReceived shutdown signal")
+            self.interrupted = True
     
     def interrupt(self):
         """Interrupt the sync session"""

@@ -131,6 +131,11 @@ class AgentManager:
         self._agent_tasks: Dict[int, asyncio.Task] = {}
         self._monitoring_task: Optional[asyncio.Task] = None
         self._shutdown = False
+        self.tmux_manager = None  # Will be set if tmux is available
+    
+    def set_tmux_manager(self, tmux_manager):
+        """Set the tmux manager for visual monitoring"""
+        self.tmux_manager = tmux_manager
     
     async def initialize_agents(self, session_id: str) -> List[Agent]:
         """Initialize all agent instances"""
@@ -167,6 +172,11 @@ class AgentManager:
         # Create Claude interface
         interface = ClaudeInterface(self.config)
         self.interfaces[agent_id] = interface
+        
+        # If tmux manager is available, tell the interface to use a specific pane
+        if self.tmux_manager:
+            # Set the interface to use tmux pane mode
+            interface.set_tmux_pane_mode(self.tmux_manager.session, agent_id)
         
         # Start Claude session
         try:
@@ -260,11 +270,183 @@ class AgentManager:
         
         return is_ready
     
+    async def detect_api_error(self, agent_id: int) -> bool:
+        """Detect if an agent has encountered an API error"""
+        output = await self.get_agent_output(agent_id, lines=30)
+        if not output:
+            return False
+        
+        error_patterns = [
+            "api error",
+            "error: api",
+            "rate limit",
+            "too many requests", 
+            "failed to respond",
+            "request failed",
+            "connection error",
+            "network error",
+            "503 service",
+            "429 too many",
+            "timeout",
+            "authentication failed",
+            "quota exceeded",
+            "service unavailable"
+        ]
+        
+        output_lower = output.lower()
+        
+        # Check for error patterns
+        has_error = any(pattern in output_lower for pattern in error_patterns)
+        
+        # Also check if agent has been stuck on same output
+        agent = self.pool.get_agent_by_id(agent_id)
+        if agent:
+            if not hasattr(agent, 'last_output_hash'):
+                agent.last_output_hash = hash(output)
+                agent.stuck_count = 0
+            else:
+                current_hash = hash(output)
+                if current_hash == agent.last_output_hash:
+                    agent.stuck_count += 1
+                    # Consider stuck after 3 checks (30 seconds)
+                    if agent.stuck_count >= 3 and has_error:
+                        logger.warning(f"Agent {agent_id} appears stuck with error pattern")
+                        return True
+                else:
+                    agent.last_output_hash = current_hash
+                    agent.stuck_count = 0
+        
+        return has_error and getattr(agent, 'stuck_count', 0) >= 2
+    
+    async def recover_from_error(self, agent_id: int) -> bool:
+        """Attempt to recover an agent from an API error"""
+        agent = self.pool.get_agent_by_id(agent_id)
+        if not agent:
+            return False
+        
+        # Initialize recovery tracking
+        if not hasattr(agent, 'recovery_attempts'):
+            agent.recovery_attempts = 0
+        
+        agent.recovery_attempts += 1
+        
+        # Progressive recovery strategies
+        recovery_commands = [
+            "--continue",
+            "Please retry the last operation and continue with your work",
+            "If you encountered an error, please try again with a different approach",
+            "Continue with your assigned tasks, skipping any problematic operations", 
+            "What is your current status? Please proceed with the next available task"
+        ]
+        
+        if agent.recovery_attempts <= len(recovery_commands):
+            command = recovery_commands[agent.recovery_attempts - 1]
+            logger.info(f"Recovery attempt {agent.recovery_attempts} for agent {agent_id}: {command}")
+            
+            # Send recovery command
+            success = await self.send_to_agent(agent_id, command)
+            if not success:
+                return False
+            
+            # Wait and check if recovery worked
+            await asyncio.sleep(15)
+            
+            # Check if agent has new output (recovery working)
+            new_output = await self.get_agent_output(agent_id, lines=10)
+            if new_output:
+                output_lower = new_output.lower()
+                # Look for signs of recovery
+                recovery_indicators = [
+                    "continuing",
+                    "proceeding", 
+                    "working on",
+                    "starting",
+                    "let me",
+                    ">",  # New prompt
+                    "i'll",
+                    "sure"
+                ]
+                
+                has_recovery = any(indicator in output_lower for indicator in recovery_indicators)
+                no_new_errors = not any(pattern in output_lower for pattern in [
+                    "api error", "error:", "failed", "timeout"
+                ])
+                
+                if has_recovery and no_new_errors:
+                    logger.info(f"Agent {agent_id} recovery successful!")
+                    agent.recovery_attempts = 0
+                    agent.stuck_count = 0
+                    agent.status = AgentStatus.WORKING
+                    agent.update_activity()
+                    return True
+        
+        if agent.recovery_attempts >= len(recovery_commands):
+            logger.warning(f"Agent {agent_id} failed all recovery attempts, marking as ERROR")
+            agent.status = AgentStatus.ERROR
+            agent.error = f"Failed to recover from API error after {agent.recovery_attempts} attempts"
+        
+        return False
+    
+    async def force_recovery(self, agent_id: int) -> bool:
+        """Manually force recovery attempt for an agent"""
+        agent = self.pool.get_agent_by_id(agent_id)
+        if not agent:
+            logger.error(f"Agent {agent_id} not found for forced recovery")
+            return False
+        
+        logger.info(f"Forcing recovery for agent {agent_id}")
+        
+        # Reset recovery attempts for fresh start
+        if hasattr(agent, 'recovery_attempts'):
+            agent.recovery_attempts = 0
+        
+        # Try recovery
+        return await self.recover_from_error(agent_id)
+    
+    async def get_agent_status_report(self) -> Dict[str, Any]:
+        """Get detailed status report including error information"""
+        report = {
+            'total_agents': len(self.pool.agents),
+            'agents': [],
+            'error_summary': {
+                'agents_with_errors': 0,
+                'recovery_attempts': 0,
+                'successful_recoveries': 0
+            }
+        }
+        
+        for agent in self.pool.agents:
+            agent_info = {
+                'id': agent.id,
+                'status': agent.status.value,
+                'error': getattr(agent, 'error', None),
+                'recovery_attempts': getattr(agent, 'recovery_attempts', 0),
+                'stuck_count': getattr(agent, 'stuck_count', 0),
+                'uptime': agent.uptime
+            }
+            
+            report['agents'].append(agent_info)
+            
+            # Update error summary
+            if agent.status == AgentStatus.ERROR:
+                report['error_summary']['agents_with_errors'] += 1
+            
+            if hasattr(agent, 'recovery_attempts'):
+                report['error_summary']['recovery_attempts'] += agent.recovery_attempts
+                if agent.recovery_attempts > 0 and agent.status != AgentStatus.ERROR:
+                    report['error_summary']['successful_recoveries'] += 1
+        
+        return report
+    
     async def _monitor_agents(self):
         """Monitor agent health and status"""
         while not self._shutdown:
             try:
                 for agent in self.pool.agents:
+                    # Skip agents that are already stopped or in error state
+                    if agent.status in [AgentStatus.STOPPED, AgentStatus.ERROR]:
+                        continue
+                    
                     # Check if agent is still running
                     interface = self.interfaces.get(agent.id)
                     if interface and not await interface.is_running():
@@ -272,8 +454,19 @@ class AgentManager:
                             logger.warning(f"Agent {agent.id} stopped unexpectedly")
                             agent.status = AgentStatus.STOPPED
                             agent.error = "Process terminated"
+                        continue
                     
-                    # Check for idle agents
+                    # Check for API errors and attempt recovery
+                    if agent.status in [AgentStatus.WORKING, AgentStatus.IDLE]:
+                        error_detected = await self.detect_api_error(agent.id)
+                        if error_detected:
+                            logger.warning(f"API error detected for agent {agent.id}, attempting recovery")
+                            recovery_success = await self.recover_from_error(agent.id)
+                            if recovery_success:
+                                logger.info(f"Successfully recovered agent {agent.id}")
+                            continue  # Skip other checks while recovering
+                    
+                    # Check for idle agents (only if not recovering from error)
                     if agent.status == AgentStatus.WORKING:
                         if await self.check_agent_ready(agent.id):
                             agent.status = AgentStatus.IDLE
@@ -283,6 +476,15 @@ class AgentManager:
                 if int(time.time()) % 60 == 0:  # Every minute
                     stats = self.pool.get_statistics()
                     logger.debug(f"Agent pool stats: {stats}")
+                    
+                    # Log recovery statistics
+                    recovery_stats = {}
+                    for agent in self.pool.agents:
+                        if hasattr(agent, 'recovery_attempts') and agent.recovery_attempts > 0:
+                            recovery_stats[agent.id] = agent.recovery_attempts
+                    
+                    if recovery_stats:
+                        logger.info(f"Recovery stats: {recovery_stats}")
                 
             except Exception as e:
                 logger.error(f"Error in agent monitoring: {e}")
@@ -373,34 +575,47 @@ class AgentManager:
             
             await asyncio.sleep(5)
     
-    async def shutdown(self):
-        """Shutdown all agents gracefully"""
-        logger.info("Shutting down agent manager")
+    async def shutdown(self, force_exit=False):
+        """Shutdown all agents gracefully
+        
+        Args:
+            force_exit: If True, send exit command to agents. If False, keep them running.
+        """
+        logger.info(f"Shutting down agent manager (force_exit={force_exit})")
         self._shutdown = True
         
         # Cancel monitoring
         if self._monitoring_task:
             self._monitoring_task.cancel()
         
-        # Stop all agents
-        for agent_id, interface in self.interfaces.items():
-            try:
-                # Send exit command
-                await interface.send_message("/exit")
-                await asyncio.sleep(1)
-                
-                # Stop interface
-                await interface.stop()
-                
-                # Update agent status
+        if force_exit:
+            # Stop all agents
+            for agent_id, interface in self.interfaces.items():
+                try:
+                    # Send exit command
+                    await interface.send_message("/exit")
+                    await asyncio.sleep(1)
+                    
+                    # Stop interface
+                    await interface.stop()
+                    
+                    # Update agent status
+                    agent = self.pool.get_agent_by_id(agent_id)
+                    if agent:
+                        agent.status = AgentStatus.STOPPED
+                        
+                except Exception as e:
+                    logger.error(f"Error stopping agent {agent_id}: {e}")
+            
+            logger.info("All agents shut down")
+        else:
+            # Just update status without stopping
+            for agent_id in self.interfaces:
                 agent = self.pool.get_agent_by_id(agent_id)
                 if agent:
-                    agent.status = AgentStatus.STOPPED
-                    
-            except Exception as e:
-                logger.error(f"Error stopping agent {agent_id}: {e}")
-        
-        logger.info("All agents shut down")
+                    agent.status = AgentStatus.IDLE
+            
+            logger.info("Agent manager shutdown (agents still running in tmux)")
     
     def get_agent_metrics(self) -> Dict[str, Any]:
         """Get detailed metrics for all agents"""

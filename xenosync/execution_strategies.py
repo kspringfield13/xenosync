@@ -218,6 +218,8 @@ Before making changes:
                     status="assigned"
                 )
             
+            logger.info(f"Assigning {len(assigned_steps)} steps to agent {agent_id}: {[s.number for s in assigned_steps]}")
+            
             # Send steps to agent
             tasks.append(self._execute_agent_steps(agent, assigned_steps, step_content, session_id))
         
@@ -254,28 +256,42 @@ Before making changes:
                     self.assignments[step.number].status = "in_progress"
                     self.assignments[step.number].started_at = asyncio.get_event_loop().time()
             
-            # Wait for completion
+            # Give agent time to start processing
+            await asyncio.sleep(30)  # Initial wait before checking
+            
+            # Wait for this specific agent to complete
             max_wait = 1200  # 20 minutes for all steps
-            if await self.agent_manager.wait_for_agents(timeout=max_wait):
-                # Mark steps as completed
-                for step in steps:
-                    if step.number in self.assignments:
-                        self.assignments[step.number].status = "completed"
-                        self.assignments[step.number].completed_at = asyncio.get_event_loop().time()
+            elapsed = 0
+            check_interval = 10
+            
+            while elapsed < max_wait:
+                await asyncio.sleep(check_interval)
+                elapsed += check_interval
                 
-                # Log completed work
-                self.coordination.log_completed_work(
-                    agent.uid, session_id,
-                    f"Completed steps {[s.number for s in steps]}",
-                    success=True
-                )
-                
-                # Release claim
-                self.coordination.release_work(agent.uid, claim_id)
-                return True
-            else:
-                logger.warning(f"Agent {agent.id} timed out")
-                return False
+                # Check if this specific agent is ready (idle)
+                if await self.agent_manager.check_agent_ready(agent.id):
+                    # Mark steps as completed
+                    for step in steps:
+                        if step.number in self.assignments:
+                            self.assignments[step.number].status = "completed"
+                            self.assignments[step.number].completed_at = asyncio.get_event_loop().time()
+                    
+                    # Log completed work
+                    self.coordination.log_completed_work(
+                        agent.uid, session_id,
+                        f"Completed steps {[s.number for s in steps]}",
+                        success=True
+                    )
+                    
+                    # Release claim
+                    self.coordination.release_work(agent.uid, claim_id)
+                    logger.info(f"Agent {agent.id} completed its assigned steps")
+                    return True
+            
+            # Timeout reached
+            logger.warning(f"Agent {agent.id} timed out after {elapsed}s")
+            self.coordination.release_work(agent.uid, claim_id)
+            return False
                 
         except Exception as e:
             logger.error(f"Error in agent {agent.id} execution: {e}")
