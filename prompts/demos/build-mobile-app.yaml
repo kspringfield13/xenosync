@@ -1,0 +1,248 @@
+name: Cross-Platform Mobile Application Development
+description: Build a complete mobile application with React Native or Flutter, including UI, state management, and native features
+
+initial_prompt: |
+  You are building a cross-platform mobile application that runs on both iOS and Android. Multiple agents will collaborate on different aspects of the app development.
+  
+  Application Requirements:
+  - Beautiful, responsive UI that follows platform guidelines
+  - Smooth navigation and animations
+  - Offline functionality with data sync
+  - Push notifications
+  - Camera and photo library integration
+  - Location services
+  - Secure local storage
+  - API integration with backend
+  
+  Technology Stack:
+  - React Native with TypeScript (or Flutter)
+  - State management (Redux/MobX/Riverpod)
+  - Navigation (React Navigation/Flutter Navigator)
+  - Local database (SQLite/Realm)
+  - Testing framework
+  
+  Agents should coordinate on shared components, state management, and API interfaces.
+
+metadata:
+  recommended_agents: 5
+  recommended_mode: parallel
+  estimated_time: 40
+  difficulty: advanced
+  tags: [mobile, react-native, flutter, ios, android, cross-platform]
+
+steps:
+  - content: Set up mobile development environment
+    description: |
+      Initialize the project:
+      - Create React Native/Flutter project
+      - Configure TypeScript/Dart
+      - Set up iOS and Android builds
+      - Configure development certificates
+      - Install core dependencies
+      - Set up debugging tools
+      - Configure emulators/simulators
+      - Create project structure
+    
+  - content: Design app architecture and navigation
+    description: |
+      Build navigation structure:
+      - Implement tab navigation
+      - Add stack navigation for screens
+      - Create drawer navigation if needed
+      - Set up deep linking
+      - Implement navigation guards
+      - Add transition animations
+      - Create navigation service
+      - Handle back button behavior
+    
+  - content: Create reusable UI components
+    description: |
+      Build component library:
+      - Design system with colors and typography
+      - Custom button components
+      - Input fields with validation
+      - Card and list components
+      - Modal and dialog components
+      - Loading and error states
+      - Custom icons and assets
+      - Platform-specific styling
+    
+  - content: Implement state management
+    description: |
+      Set up application state:
+      - Configure Redux/MobX/Provider
+      - Create store structure
+      - Implement actions and reducers
+      - Add middleware for async operations
+      - Set up state persistence
+      - Implement selectors/computed values
+      - Add state debugging tools
+      - Create state migrations
+    
+  - content: Build authentication flow
+    description: |
+      Create secure authentication:
+      - Login and registration screens
+      - Biometric authentication
+      - Secure token storage
+      - Auto-login functionality
+      - Session management
+      - Logout and cleanup
+      - Password reset flow
+      - Social login integration
+    
+  - content: Integrate camera and media
+    description: |
+      Add media capabilities:
+      - Camera integration
+      - Photo library access
+      - Image cropping and editing
+      - Video recording
+      - Media upload with progress
+      - Thumbnail generation
+      - Gallery view component
+      - Media compression
+    
+  - content: Implement location services
+    description: |
+      Add location features:
+      - Request location permissions
+      - Get current location
+      - Background location tracking
+      - Geofencing capabilities
+      - Map integration
+      - Location-based notifications
+      - Address geocoding
+      - Distance calculations
+    
+  - content: Add push notifications
+    description: |
+      Implement notifications:
+      - Firebase Cloud Messaging setup
+      - Request notification permissions
+      - Handle foreground notifications
+      - Background notification handling
+      - Local notifications
+      - Notification actions
+      - Badge count management
+      - Rich notifications with images
+    
+  - content: Create offline functionality
+    description: |
+      Implement offline support:
+      - Local database setup (SQLite/Realm)
+      - Data caching strategies
+      - Offline queue for API calls
+      - Sync mechanism when online
+      - Conflict resolution
+      - Offline indicators in UI
+      - Data migration strategies
+      - Cache invalidation
+    
+  - content: Build data synchronization
+    description: |
+      Create sync system:
+      - Background sync service
+      - Incremental sync logic
+      - Full sync capabilities
+      - Conflict resolution
+      - Sync status indicators
+      - Retry mechanisms
+      - Data compression
+      - Sync scheduling
+    
+  - content: Integrate with backend APIs
+    description: |
+      Connect to backend:
+      - API client configuration
+      - Request/response interceptors
+      - Error handling
+      - Token refresh logic
+      - Request caching
+      - Upload/download progress
+      - WebSocket connections
+      - GraphQL client (if applicable)
+    
+  - content: Implement app settings
+    description: |
+      Create settings screens:
+      - User preferences
+      - Notification settings
+      - Privacy controls
+      - Theme selection
+      - Language selection
+      - Cache management
+      - Account settings
+      - About and help screens
+    
+  - content: Add analytics and monitoring
+    description: |
+      Implement tracking:
+      - Analytics SDK integration
+      - User behavior tracking
+      - Crash reporting (Sentry/Crashlytics)
+      - Performance monitoring
+      - Custom event tracking
+      - User properties
+      - Screen tracking
+      - Error logging
+    
+  - content: Optimize performance
+    description: |
+      Enhance app performance:
+      - Image lazy loading
+      - List virtualization
+      - Memory leak detection
+      - Bundle size optimization
+      - Startup time optimization
+      - Animation performance
+      - Reduce re-renders
+      - Profile and optimize
+    
+  - content: Platform-specific features
+    description: |
+      Add native capabilities:
+      - iOS widgets
+      - Android widgets
+      - App shortcuts
+      - Share extensions
+      - Today extensions
+      - Apple Watch app
+      - Android Wear support
+      - Platform-specific UI
+    
+  - content: Implement security features
+    description: |
+      Add security measures:
+      - Certificate pinning
+      - Jailbreak/root detection
+      - App obfuscation
+      - Secure storage encryption
+      - Screen recording prevention
+      - Copy/paste restrictions
+      - Biometric protection
+      - Security audit
+    
+  - content: Create comprehensive testing
+    description: |
+      Test all features:
+      - Unit tests for logic
+      - Widget/component tests
+      - Integration tests
+      - E2E tests with Detox/Appium
+      - Performance testing
+      - Accessibility testing
+      - Device compatibility testing
+      - Network condition testing
+    
+  - content: Prepare for deployment
+    description: |
+      Ready for app stores:
+      - App store assets (icons, screenshots)
+      - Store descriptions
+      - Privacy policy
+      - App signing configuration
+      - Build optimization
+      - Beta testing setup
+      - CI/CD pipeline
+      - Release notes preparation

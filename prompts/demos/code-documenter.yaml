@@ -1,0 +1,161 @@
+name: Intelligent Code Documentation Generator
+description: Automatically analyze and document any codebase with comprehensive documentation, API references, and visual diagrams
+
+initial_prompt: |
+  You are building an intelligent documentation generator that can analyze any codebase and produce comprehensive, professional documentation. Multiple agents will collaborate to handle different aspects of documentation generation.
+  
+  The documentation system should:
+  - Auto-detect programming languages and frameworks
+  - Generate inline documentation (docstrings/comments)
+  - Create comprehensive README files
+  - Produce API documentation with examples
+  - Generate architecture diagrams and flowcharts
+  - Extract and document design patterns
+  - Create getting-started guides
+  - Build interactive documentation sites
+  
+  Technology Stack:
+  - Python/Node.js for core analysis engine
+  - AST parsing for code understanding
+  - Markdown for documentation format
+  - Mermaid.js for diagrams
+  - MkDocs or Docusaurus for site generation
+  
+  The system should work with any language but optimize for: Python, JavaScript, TypeScript, Java, Go, and Rust.
+
+metadata:
+  recommended_agents: 5
+  recommended_mode: distributed
+  estimated_time: 30
+  difficulty: advanced
+  tags: [documentation, analysis, ast, markdown, automation]
+
+steps:
+  - content: Build the code analysis engine
+    description: |
+      Create the core parsing and analysis system:
+      - Language detection using file extensions and content
+      - AST parser integration for multiple languages
+      - Function and class extraction with signatures
+      - Dependency graph generation
+      - Code complexity analysis
+      - Pattern recognition for common architectures
+    
+  - content: Implement documentation extraction system
+    description: |
+      Extract existing documentation and comments:
+      - Parse existing docstrings and comments
+      - Identify undocumented functions and classes
+      - Extract parameter types and return values
+      - Analyze usage examples in tests
+      - Identify documentation gaps and inconsistencies
+      - Create documentation coverage reports
+    
+  - content: Create the documentation generator
+    description: |
+      Generate comprehensive documentation:
+      - Auto-generate missing docstrings with AI
+      - Create function and method documentation
+      - Document class hierarchies and relationships
+      - Generate parameter descriptions from context
+      - Add usage examples from test files
+      - Create error handling documentation
+    
+  - content: Build the README generator
+    description: |
+      Produce professional README files:
+      - Project title and description extraction
+      - Installation instructions based on package files
+      - Usage examples from main entry points
+      - API overview with key functions
+      - Prerequisites and dependencies listing
+      - Contributing guidelines template
+      - License detection and inclusion
+    
+  - content: Implement API documentation builder
+    description: |
+      Create detailed API references:
+      - RESTful endpoint documentation
+      - Request/response schemas
+      - Authentication requirements
+      - Rate limiting information
+      - Error codes and messages
+      - Interactive API playground
+      - OpenAPI/Swagger spec generation
+    
+  - content: Create diagram and visualization generator
+    description: |
+      Generate visual documentation:
+      - Architecture diagrams using Mermaid.js
+      - Class relationship diagrams (UML style)
+      - Sequence diagrams for complex flows
+      - Dependency graphs between modules
+      - Database schema visualizations
+      - Flow charts for business logic
+      - Call graphs for function relationships
+    
+  - content: Build the guide generation system
+    description: |
+      Create user-friendly guides:
+      - Getting started quickstart guide
+      - Installation troubleshooting guide
+      - Common use cases and recipes
+      - Best practices documentation
+      - Migration guides for version changes
+      - FAQ section from common patterns
+      - Tutorial series for complex features
+    
+  - content: Implement documentation site builder
+    description: |
+      Generate interactive documentation websites:
+      - Static site generation with MkDocs/Docusaurus
+      - Searchable documentation index
+      - Navigation structure from code organization
+      - Syntax highlighting for code examples
+      - Dark/light theme support
+      - Version dropdown for multiple releases
+      - Auto-deploy to GitHub Pages
+    
+  - content: Add documentation quality analyzer
+    description: |
+      Ensure documentation quality:
+      - Grammar and spell checking
+      - Consistency verification across docs
+      - Link validation and fixing
+      - Code example verification
+      - Documentation completeness scoring
+      - Outdated documentation detection
+      - Style guide enforcement
+    
+  - content: Create the CLI and integration tools
+    description: |
+      Build user interfaces and integrations:
+      - CLI tool for documentation generation
+      - Git hooks for documentation updates
+      - CI/CD pipeline integration
+      - IDE plugin for inline documentation
+      - Configuration file support
+      - Batch processing for multiple projects
+      - Watch mode for continuous updates
+    
+  - content: Implement multi-language support
+    description: |
+      Support various programming languages:
+      - Python docstring formats (Google, NumPy, Sphinx)
+      - JavaScript JSDoc comments
+      - TypeScript type documentation
+      - Java Javadoc generation
+      - Go documentation comments
+      - Rust documentation attributes
+      - C/C++ Doxygen support
+    
+  - content: Add advanced features and polish
+    description: |
+      Final enhancements:
+      - Documentation versioning system
+      - Changelog generation from commits
+      - Code coverage badges
+      - Documentation analytics
+      - Export to PDF/EPUB formats
+      - Custom branding and themes
+      - Performance optimization for large codebases

@@ -1,0 +1,131 @@
+name: Retro Multiplayer Snake Game
+description: Build a classic Snake game with modern multiplayer capabilities and retro aesthetics
+
+initial_prompt: |
+  You are building a multiplayer Snake game with a retro 8-bit aesthetic. This is a collaborative effort where multiple agents work together on different components of the game.
+  
+  The game should feature:
+  - Classic Snake gameplay with smooth controls
+  - Local multiplayer support (2-4 players)
+  - Retro 8-bit visual style with pixel art
+  - Sound effects and background music
+  - High score tracking with leaderboard
+  - Power-ups and obstacles for variety
+  - Responsive design that works on desktop and mobile
+  
+  Technology Stack:
+  - HTML5 Canvas for rendering
+  - JavaScript/TypeScript for game logic
+  - CSS for retro styling
+  - LocalStorage for high scores
+  - Web Audio API for sound
+  
+  Before starting, analyze the project structure and coordinate with other agents on the component interfaces.
+
+metadata:
+  recommended_agents: 4
+  recommended_mode: parallel
+  estimated_time: 25
+  difficulty: intermediate
+  tags: [game, multiplayer, canvas, javascript, retro]
+
+steps:
+  - content: Set up the project structure and game framework
+    description: |
+      Create the foundational HTML5 game structure:
+      - index.html with canvas element and retro UI
+      - CSS with 8-bit fonts and pixel-perfect styling
+      - Main game loop with requestAnimationFrame
+      - Asset loading system for sprites and sounds
+      - Configuration for game settings
+    
+  - content: Implement core Snake game mechanics
+    description: |
+      Build the essential Snake gameplay:
+      - Snake movement with smooth grid-based animation
+      - Food spawning system with collision detection
+      - Snake growth mechanism when eating food
+      - Self-collision detection for game over
+      - Wrap-around or wall collision options
+      - Speed increase as snake grows
+    
+  - content: Create the rendering and visual effects system
+    description: |
+      Develop the retro visual presentation:
+      - Pixel art sprites for snake segments, food, and power-ups
+      - 8-bit color palette with CRT screen effect
+      - Particle effects for eating food and collisions
+      - Smooth animations between grid positions
+      - Retro UI elements (score display, lives, game over screen)
+      - Screen shake and visual feedback effects
+    
+  - content: Build the multiplayer system
+    description: |
+      Implement local multiplayer features:
+      - Support for 2-4 players on same screen
+      - Different control schemes (WASD, arrows, IJKL, numpad)
+      - Split-screen or shared arena modes
+      - Collision between different snakes
+      - Competitive scoring system
+      - Player colors and customization
+    
+  - content: Add power-ups and special features
+    description: |
+      Create variety with special items:
+      - Speed boost/slow power-ups
+      - Invincibility temporary effect
+      - Score multipliers
+      - Shrink power-up to reduce snake length
+      - Ghost mode to pass through walls
+      - Random obstacle generation
+      - Special golden food for bonus points
+    
+  - content: Implement audio and music system
+    description: |
+      Create retro sound experience:
+      - 8-bit sound effects using Web Audio API
+      - Eating food beeps and boops
+      - Background chiptune music tracks
+      - Level up and achievement sounds
+      - Game over and victory jingles
+      - Volume controls and mute options
+    
+  - content: Create menu and UI systems
+    description: |
+      Build user interface components:
+      - Animated main menu with retro styling
+      - Player selection and game mode screens
+      - Pause menu with resume/restart options
+      - Settings for difficulty and game options
+      - High score leaderboard display
+      - Game over screen with stats
+    
+  - content: Implement scoring and progression system
+    description: |
+      Add competitive elements:
+      - Point system based on food eaten and survival time
+      - Combo multipliers for quick successive eating
+      - Level progression with increasing difficulty
+      - Achievement system with unlockables
+      - LocalStorage for persistent high scores
+      - Statistics tracking (games played, total score, etc.)
+    
+  - content: Add mobile and responsive support
+    description: |
+      Ensure cross-device compatibility:
+      - Touch controls for mobile devices
+      - Swipe gestures for snake direction
+      - Responsive canvas scaling
+      - Virtual gamepad for mobile multiplayer
+      - Orientation detection and adjustment
+      - Performance optimization for mobile
+    
+  - content: Polish and game feel improvements
+    description: |
+      Final touches for professional quality:
+      - Smooth transitions between game states
+      - Easter eggs and secret features
+      - Debug mode for testing
+      - Performance profiling and optimization
+      - Cross-browser compatibility testing
+      - Final bug fixes and balancing

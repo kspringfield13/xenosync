@@ -1,0 +1,149 @@
+name: Fix TypeScript Errors Across Codebase
+description: Systematically identify and fix all TypeScript compilation errors in a project
+
+initial_prompt: |
+  You are part of a team tasked with fixing all TypeScript errors in this codebase. Multiple agents will work together to identify, categorize, and fix different types of TypeScript issues.
+  
+  Your objectives:
+  - Run TypeScript compiler to identify all errors
+  - Categorize errors by type and severity
+  - Fix errors systematically without breaking functionality
+  - Add proper type definitions where missing
+  - Improve type safety throughout the codebase
+  - Ensure all fixes pass existing tests
+  
+  Coordination Strategy:
+  - Each agent claims specific files or error categories
+  - Check coordination database for other agents' work
+  - Focus on different parts of the codebase
+  - Share discovered type definitions with other agents
+  
+  Remember: The goal is not just to silence errors but to improve actual type safety.
+
+metadata:
+  recommended_agents: 4
+  recommended_mode: distributed
+  estimated_time: 20
+  difficulty: intermediate
+  tags: [typescript, debugging, types, refactoring, quality]
+
+steps:
+  - content: Initial error assessment and categorization
+    description: |
+      Run comprehensive TypeScript analysis:
+      - Execute `tsc --noEmit` to see all errors
+      - Categorize errors by type (missing types, incorrect types, any usage, etc.)
+      - Create error priority list (critical vs warnings)
+      - Identify common patterns in errors
+      - Document third-party library type issues
+      - Estimate fix complexity for each category
+    
+  - content: Fix missing type definitions
+    description: |
+      Add proper type definitions where absent:
+      - Install @types packages for untyped libraries
+      - Create custom type declaration files (.d.ts)
+      - Add function parameter and return types
+      - Define interface and type aliases for objects
+      - Type React component props and state
+      - Add generics where appropriate
+    
+  - content: Resolve 'any' type usage
+    description: |
+      Eliminate unsafe 'any' types:
+      - Replace 'any' with specific types
+      - Use 'unknown' for truly unknown types
+      - Implement type guards for runtime checking
+      - Add proper type assertions where safe
+      - Document cases where 'any' is unavoidable
+      - Enable strict mode flags progressively
+    
+  - content: Fix type incompatibility errors
+    description: |
+      Resolve type mismatch issues:
+      - Fix incorrect function signatures
+      - Resolve union and intersection type issues
+      - Handle null and undefined properly
+      - Fix array and object type mismatches
+      - Resolve promise and async type errors
+      - Update outdated type definitions
+    
+  - content: Improve React/Vue/Angular component types
+    description: |
+      Enhance framework-specific typing:
+      - Type component props with interfaces
+      - Add proper event handler types
+      - Type refs and context correctly
+      - Fix HOC (Higher-Order Component) types
+      - Type custom hooks properly
+      - Add proper children types
+    
+  - content: Fix module and import issues
+    description: |
+      Resolve module resolution errors:
+      - Fix import path issues
+      - Configure module resolution in tsconfig
+      - Handle default vs named exports
+      - Fix circular dependency issues
+      - Type module declarations
+      - Configure path aliases correctly
+    
+  - content: Add utility types and helpers
+    description: |
+      Create reusable type utilities:
+      - Define common utility types (Nullable, Maybe, etc.)
+      - Create type guards and predicates
+      - Build generic type helpers
+      - Implement branded types for validation
+      - Add mapped and conditional types
+      - Document type utility usage
+    
+  - content: Configure TypeScript strictness
+    description: |
+      Optimize compiler configuration:
+      - Enable strict mode incrementally
+      - Configure strictNullChecks
+      - Enable noImplicitAny
+      - Set up strictFunctionTypes
+      - Configure noImplicitThis
+      - Add project-specific rules
+    
+  - content: Type API calls and responses
+    description: |
+      Ensure API type safety:
+      - Generate types from API schemas
+      - Type REST endpoint responses
+      - Add GraphQL type generation
+      - Type WebSocket messages
+      - Validate runtime data against types
+      - Handle API error types
+    
+  - content: Fix test file type errors
+    description: |
+      Resolve testing-related type issues:
+      - Type test utilities and helpers
+      - Fix mock type definitions
+      - Type test fixtures properly
+      - Add jest/mocha type definitions
+      - Type assertion helpers
+      - Fix test-specific any usage
+    
+  - content: Document type decisions
+    description: |
+      Create type documentation:
+      - Document complex type definitions
+      - Explain type utility usage
+      - Create type usage guidelines
+      - Document any remaining 'any' usage
+      - Add JSDoc comments for types
+      - Create type migration guide
+    
+  - content: Validate and verify fixes
+    description: |
+      Ensure all fixes work correctly:
+      - Run full TypeScript compilation
+      - Execute all test suites
+      - Check build process
+      - Verify IDE integration
+      - Test hot reload functionality
+      - Confirm no runtime errors introduced

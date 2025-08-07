@@ -1,0 +1,175 @@
+name: Personal Productivity Dashboard
+description: Build a beautiful, customizable personal dashboard with widgets for weather, todos, calendar, news, and more
+
+initial_prompt: |
+  You are creating a modern personal productivity dashboard that helps users start their day with all important information in one place. Multiple agents will work together to build different widgets and features.
+  
+  The dashboard should include:
+  - Modular widget system with drag-and-drop layout
+  - Real-time weather with forecasts
+  - Todo list with categories and priorities
+  - Calendar integration with upcoming events
+  - News feed from customizable sources
+  - Time zones and world clock
+  - Quick notes and reminders
+  - Habit tracker and goals
+  - Customizable themes and backgrounds
+  
+  Technology Stack:
+  - React or Vue.js for the frontend
+  - Local storage for data persistence
+  - External APIs for weather, news, quotes
+  - CSS Grid/Flexbox for responsive layout
+  - Service workers for offline functionality
+  
+  Focus on beautiful design, smooth animations, and excellent user experience.
+
+metadata:
+  recommended_agents: 4
+  recommended_mode: parallel
+  estimated_time: 20
+  difficulty: intermediate
+  tags: [dashboard, widgets, react, api, productivity]
+
+steps:
+  - content: Set up the dashboard framework and layout system
+    description: |
+      Create the foundational dashboard structure:
+      - React/Vue app with component architecture
+      - Grid-based layout system for widgets
+      - Drag-and-drop functionality for widget arrangement
+      - Responsive design for desktop, tablet, mobile
+      - Local storage for layout persistence
+      - Widget registration and lifecycle system
+    
+  - content: Build the weather widget
+    description: |
+      Implement comprehensive weather information:
+      - Current temperature and conditions
+      - 5-day forecast with highs/lows
+      - Hourly forecast for today
+      - Weather icons and animations
+      - Location detection or manual entry
+      - Multiple location support
+      - Severe weather alerts
+      - UV index and air quality
+    
+  - content: Create the todo list widget
+    description: |
+      Develop a powerful task management widget:
+      - Add, edit, delete tasks
+      - Categories and color coding
+      - Priority levels (high, medium, low)
+      - Due dates and reminders
+      - Recurring tasks support
+      - Progress tracking
+      - Quick add with keyboard shortcuts
+      - Archive completed tasks
+    
+  - content: Implement the calendar widget
+    description: |
+      Build calendar and event tracking:
+      - Month/week/day views
+      - Google Calendar integration
+      - Event creation and editing
+      - Color-coded event categories
+      - Upcoming events list
+      - Birthday and holiday reminders
+      - Meeting links and locations
+      - Countdown to important dates
+    
+  - content: Create the news feed widget
+    description: |
+      Develop customizable news aggregation:
+      - Multiple news source options
+      - Category filtering (tech, business, sports, etc.)
+      - Headline carousel with images
+      - Read later functionality
+      - Article preview on hover
+      - RSS feed support
+      - Trending topics section
+      - Refresh interval settings
+    
+  - content: Build the clock and time widget
+    description: |
+      Implement time-related features:
+      - Analog and digital clock options
+      - Multiple time zone support
+      - World clock with city search
+      - Countdown timers
+      - Stopwatch functionality
+      - Pomodoro timer for productivity
+      - Meeting time converter
+      - Sunrise/sunset times
+    
+  - content: Create the notes and reminders widget
+    description: |
+      Build quick note-taking functionality:
+      - Rich text editor for notes
+      - Markdown support
+      - Sticky note style interface
+      - Color-coded notes
+      - Search within notes
+      - Pin important notes
+      - Voice-to-text option
+      - Reminder notifications
+    
+  - content: Implement the habit tracker widget
+    description: |
+      Develop habit and goal tracking:
+      - Daily habit check-off
+      - Streak counters
+      - Progress visualization
+      - Goal setting with milestones
+      - Statistics and insights
+      - Motivational quotes
+      - Achievement badges
+      - Export data functionality
+    
+  - content: Build the customization system
+    description: |
+      Create personalization features:
+      - Theme selector (light, dark, custom)
+      - Background image options
+      - Color scheme customization
+      - Widget size options
+      - Font selection
+      - Animation preferences
+      - Import/export settings
+      - Multiple dashboard profiles
+    
+  - content: Add data and API integration layer
+    description: |
+      Implement backend connectivity:
+      - API service for weather data
+      - News API integration
+      - Quote of the day API
+      - Currency exchange rates
+      - Stock market data
+      - Cryptocurrency prices
+      - Sports scores
+      - Cache management
+    
+  - content: Create additional utility widgets
+    description: |
+      Build bonus widgets:
+      - Calculator with history
+      - Unit converter
+      - Password generator
+      - QR code generator
+      - Bookmark manager
+      - Music player controls
+      - System monitor
+      - Network speed test
+    
+  - content: Implement PWA and offline features
+    description: |
+      Add progressive web app capabilities:
+      - Service worker for offline mode
+      - Data synchronization
+      - Push notifications
+      - App installation prompt
+      - Offline data storage
+      - Background sync
+      - Performance optimization
+      - Cross-device sync preparation

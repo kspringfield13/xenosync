@@ -1,0 +1,179 @@
+name: Multi-Personality Chatbot Collection
+description: Create a collection of themed chatbots with distinct personalities, from Shakespeare to pirates to tech support
+
+initial_prompt: |
+  You are building a collection of chatbots, each with a unique personality and speaking style. Multiple agents will collaborate, with each agent developing and refining different bot personalities.
+  
+  The chatbot collection should feature:
+  - At least 6 distinct personalities with unique voices
+  - Personality-appropriate responses and vocabulary
+  - Context awareness and memory
+  - Smooth personality switching
+  - Educational and entertainment value
+  - Web interface for interacting with all bots
+  - Personality customization options
+  
+  Personality Examples:
+  - Shakespeare Bot (speaks in iambic pentameter and Elizabethan English)
+  - Pirate Bot (nautical terms, "arr" and "ahoy")
+  - Zen Master Bot (philosophical, calm, uses koans)
+  - Dad Joke Bot (terrible puns and wholesome humor)
+  - Tech Support Bot (patient, technical, step-by-step)
+  - Motivational Coach Bot (energetic, positive, inspiring)
+  
+  Technology Stack:
+  - Python or Node.js backend
+  - Natural Language Processing (NLP)
+  - React/Vue frontend with chat interface
+  - WebSocket for real-time chat
+  - Local storage for conversation history
+
+metadata:
+  recommended_agents: 3
+  recommended_mode: collaborative
+  estimated_time: 25
+  difficulty: intermediate
+  tags: [chatbot, ai, nlp, personality, entertainment]
+
+steps:
+  - content: Set up the chatbot framework
+    description: |
+      Create the core chatbot infrastructure:
+      - Message processing pipeline
+      - Personality module system
+      - Response generation engine
+      - Context and memory management
+      - WebSocket server for real-time chat
+      - Session handling for multiple users
+      - Rate limiting and security measures
+    
+  - content: Develop the Shakespeare Bot personality
+    description: |
+      Create a bot that speaks like William Shakespeare:
+      - Elizabethan vocabulary database
+      - Iambic pentameter generator
+      - Shakespearean insults and compliments
+      - Quote integration from actual plays
+      - "Thou", "thee", "thy" pronoun usage
+      - Poetic metaphors and similes
+      - Dramatic responses to questions
+      - Soliloquy mode for deep thoughts
+    
+  - content: Build the Pirate Bot personality
+    description: |
+      Develop a swashbuckling pirate character:
+      - Nautical terminology database
+      - Pirate slang and expressions
+      - Treasure and adventure references
+      - Sea shanty lyrics integration
+      - Ship and sailing metaphors
+      - Rum and plunder jokes
+      - "Arr", "ahoy", "matey" interjections
+      - Pirate code of conduct references
+    
+  - content: Create the Zen Master Bot personality
+    description: |
+      Build a wise and philosophical bot:
+      - Zen koan database
+      - Meditation and mindfulness advice
+      - Buddhist philosophy integration
+      - Calm and measured responses
+      - Nature metaphors and imagery
+      - Paradoxical wisdom
+      - Breathing exercise guidance
+      - Haiku generation for special moments
+    
+  - content: Implement the Dad Joke Bot personality
+    description: |
+      Develop the ultimate dad joke machine:
+      - Extensive pun database
+      - Setup and punchline timing
+      - Groan-worthy wordplay
+      - Clean, family-friendly humor
+      - "Hi hungry, I'm Dad" responses
+      - Knock-knock joke collection
+      - One-liners and zingers
+      - Proud reactions to groans
+    
+  - content: Build the Tech Support Bot personality
+    description: |
+      Create a helpful technical assistant:
+      - Technical troubleshooting scripts
+      - Step-by-step instruction generation
+      - "Have you tried turning it off and on?"
+      - Patient and understanding tone
+      - Technical jargon explanation
+      - Common problem solutions
+      - Remote assistance simulation
+      - Ticket number generation for fun
+    
+  - content: Develop the Motivational Coach Bot personality
+    description: |
+      Build an inspiring life coach:
+      - Motivational quote database
+      - Goal-setting frameworks
+      - Positive affirmations
+      - Energy and enthusiasm in responses
+      - Success story references
+      - "You got this!" encouragement
+      - Achievement celebration mode
+      - Personalized pep talks
+    
+  - content: Create the personality switching system
+    description: |
+      Implement smooth transitions between bots:
+      - Quick personality switching commands
+      - Personality introduction messages
+      - Smooth handoff between personalities
+      - Mixed personality mode for fun
+      - Personality strength slider
+      - Random personality option
+      - Personality combination experiments
+    
+  - content: Build the web chat interface
+    description: |
+      Create an engaging user interface:
+      - Modern chat UI with bubbles
+      - Personality selector with avatars
+      - Typing indicators for each bot
+      - Message history with search
+      - Emoji and reaction support
+      - Voice input option
+      - Dark/light theme toggle
+      - Mobile-responsive design
+    
+  - content: Implement conversation features
+    description: |
+      Add advanced chat capabilities:
+      - Context awareness across messages
+      - Conversation memory and callbacks
+      - Multi-turn dialogue support
+      - Topic detection and routing
+      - Sentiment analysis for responses
+      - Language detection
+      - Conversation export options
+      - Favorite message bookmarking
+    
+  - content: Add personality customization
+    description: |
+      Allow users to create custom personalities:
+      - Personality trait sliders
+      - Custom vocabulary lists
+      - Response style selection
+      - Combine existing personalities
+      - Save custom personalities
+      - Share personalities with others
+      - Import/export personality configs
+      - Community personality gallery
+    
+  - content: Create interactive features and games
+    description: |
+      Add entertainment elements:
+      - Personality guessing game
+      - Bot debate mode
+      - Story collaboration between bots
+      - Trivia with personality-themed questions
+      - Role-playing scenarios
+      - Bot theater performances
+      - Personality translation challenges
+      - Easter eggs and hidden features

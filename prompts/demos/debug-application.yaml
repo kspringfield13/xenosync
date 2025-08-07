@@ -1,0 +1,222 @@
+name: Comprehensive Application Debugging
+description: Systematically debug and prepare any application for production deployment
+
+initial_prompt: |
+  You are an elite debugging team tasked with finding and fixing all issues in an application before production deployment. Multiple agents will work together as debugging specialists, each focusing on different aspects.
+  
+  Debugging Philosophy:
+  - Every bug tells a story - understand the root cause
+  - Don't just fix symptoms, fix the disease
+  - Document everything for future reference
+  - Test fixes thoroughly before considering them complete
+  
+  Focus Areas:
+  - Runtime errors and crashes
+  - Performance bottlenecks
+  - Memory leaks and resource issues
+  - Security vulnerabilities
+  - Cross-platform compatibility
+  - Edge cases and race conditions
+  - User experience issues
+  
+  Each agent should specialize in different debugging domains while sharing findings.
+
+metadata:
+  recommended_agents: 4
+  recommended_mode: collaborative
+  estimated_time: 30
+  difficulty: advanced
+  tags: [debugging, testing, performance, security, quality]
+
+steps:
+  - content: Environment setup and initial assessment
+    description: |
+      Prepare debugging environment:
+      - Set up development environment with debug tools
+      - Configure logging at appropriate levels
+      - Install profiling and monitoring tools
+      - Set up error tracking (Sentry, Rollbar)
+      - Configure browser DevTools
+      - Prepare testing devices/browsers
+      - Create debugging branches
+      - Document known issues
+    
+  - content: Collect and categorize all errors
+    description: |
+      Comprehensive error gathering:
+      - Review error logs and crash reports
+      - Collect user-reported issues
+      - Run static code analysis
+      - Check linting warnings
+      - Review console errors
+      - Examine network failures
+      - Document reproduction steps
+      - Prioritize by severity and frequency
+    
+  - content: Debug runtime errors
+    description: |
+      Fix application crashes:
+      - Analyze stack traces
+      - Add error boundaries/try-catch blocks
+      - Fix null/undefined references
+      - Resolve promise rejections
+      - Fix async/await issues
+      - Handle edge cases
+      - Add defensive programming
+      - Validate all inputs
+    
+  - content: Fix memory leaks
+    description: |
+      Resolve memory issues:
+      - Profile memory usage
+      - Identify memory leaks
+      - Fix event listener cleanup
+      - Clear timers and intervals
+      - Optimize object references
+      - Fix circular dependencies
+      - Implement proper cleanup
+      - Add memory monitoring
+    
+  - content: Resolve performance issues
+    description: |
+      Optimize application speed:
+      - Profile CPU usage
+      - Identify render bottlenecks
+      - Optimize database queries
+      - Fix N+1 query problems
+      - Implement caching
+      - Optimize bundle size
+      - Lazy load resources
+      - Reduce time to interactive
+    
+  - content: Debug network and API issues
+    description: |
+      Fix connectivity problems:
+      - Test all API endpoints
+      - Handle timeout scenarios
+      - Fix CORS issues
+      - Implement retry logic
+      - Handle offline states
+      - Fix request race conditions
+      - Validate API responses
+      - Test error responses
+    
+  - content: Fix cross-browser compatibility
+    description: |
+      Ensure browser support:
+      - Test on Chrome, Firefox, Safari, Edge
+      - Fix CSS compatibility issues
+      - Resolve JavaScript polyfill needs
+      - Test on mobile browsers
+      - Fix viewport issues
+      - Handle browser-specific bugs
+      - Test browser extensions impact
+      - Verify progressive enhancement
+    
+  - content: Debug mobile-specific issues
+    description: |
+      Fix mobile problems:
+      - Test on various screen sizes
+      - Fix touch event handling
+      - Resolve orientation issues
+      - Debug iOS-specific bugs
+      - Fix Android-specific issues
+      - Test on older devices
+      - Optimize for slow networks
+      - Fix keyboard handling
+    
+  - content: Resolve data and state issues
+    description: |
+      Fix data problems:
+      - Debug state management
+      - Fix data synchronization
+      - Resolve cache invalidation
+      - Fix race conditions
+      - Handle concurrent updates
+      - Fix data persistence
+      - Validate data integrity
+      - Test migration scripts
+    
+  - content: Security vulnerability testing
+    description: |
+      Find security issues:
+      - Test for XSS vulnerabilities
+      - Check SQL injection points
+      - Verify authentication
+      - Test authorization rules
+      - Check for exposed secrets
+      - Test input validation
+      - Verify HTTPS usage
+      - Audit dependencies
+    
+  - content: Debug user interface issues
+    description: |
+      Fix UI/UX problems:
+      - Fix layout breaking
+      - Resolve z-index issues
+      - Fix responsive design
+      - Debug animations
+      - Fix form validation
+      - Resolve accessibility issues
+      - Test keyboard navigation
+      - Fix focus management
+    
+  - content: Test edge cases and boundaries
+    description: |
+      Handle unusual scenarios:
+      - Test with empty data
+      - Try maximum values
+      - Test special characters
+      - Handle rapid clicking
+      - Test slow connections
+      - Try invalid inputs
+      - Test permission denials
+      - Handle storage limits
+    
+  - content: Load and stress testing
+    description: |
+      Test under pressure:
+      - Simulate high user load
+      - Test with large datasets
+      - Measure response times
+      - Test concurrent users
+      - Monitor resource usage
+      - Find breaking points
+      - Test auto-scaling
+      - Verify rate limiting
+    
+  - content: Implement comprehensive logging
+    description: |
+      Enhance debugging capability:
+      - Add structured logging
+      - Include correlation IDs
+      - Log user actions
+      - Track performance metrics
+      - Add error context
+      - Implement log levels
+      - Set up log aggregation
+      - Create debugging dashboards
+    
+  - content: Create automated tests
+    description: |
+      Prevent regression:
+      - Write tests for fixed bugs
+      - Add integration tests
+      - Create E2E test scenarios
+      - Add performance tests
+      - Write security tests
+      - Test error scenarios
+      - Add smoke tests
+      - Create regression suite
+    
+  - content: Final validation and monitoring
+    description: |
+      Prepare for production:
+      - Run full regression tests
+      - Verify all fixes work
+      - Test deployment process
+      - Set up monitoring alerts
+      - Create runbooks
+      - Document known issues
+      - Prepare rollback plan
+      - Brief support team

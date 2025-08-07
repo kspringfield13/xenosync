@@ -1,0 +1,248 @@
+name: RESTful API Development
+description: Build a complete, production-ready RESTful API with documentation, testing, and best practices
+
+initial_prompt: |
+  You are building a comprehensive RESTful API that will serve as the backend for multiple client applications. Multiple agents will collaborate on different aspects of the API development.
+  
+  API Requirements:
+  - RESTful design principles
+  - CRUD operations for all resources
+  - Authentication and authorization
+  - Input validation and error handling
+  - Rate limiting and caching
+  - Comprehensive documentation
+  - Versioning strategy
+  - Testing at all levels
+  
+  Technology Choices:
+  - Node.js/Python/Java/Go (adapt to project)
+  - Express/FastAPI/Spring Boot
+  - PostgreSQL/MongoDB for data
+  - Redis for caching
+  - Docker for containerization
+  
+  Agents should coordinate on API contracts, shared utilities, and database schemas.
+
+metadata:
+  recommended_agents: 4
+  recommended_mode: parallel
+  estimated_time: 35
+  difficulty: intermediate
+  tags: [api, backend, rest, database, microservices]
+
+steps:
+  - content: Design API architecture
+    description: |
+      Plan the API structure:
+      - Define resource models
+      - Design URL patterns
+      - Plan API versioning strategy
+      - Design request/response formats
+      - Define error response structure
+      - Plan pagination strategy
+      - Design filtering and sorting
+      - Create API style guide
+    
+  - content: Set up project structure
+    description: |
+      Initialize API project:
+      - Create project with chosen framework
+      - Set up folder structure (routes, controllers, models)
+      - Configure environment variables
+      - Set up dependency injection
+      - Configure logging framework
+      - Set up error handling middleware
+      - Configure CORS and security headers
+      - Initialize Git with .gitignore
+    
+  - content: Design and create database schema
+    description: |
+      Build data layer:
+      - Design normalized database schema
+      - Create migration files
+      - Set up database connections
+      - Implement connection pooling
+      - Create indexes for performance
+      - Add foreign key constraints
+      - Set up database seeding
+      - Implement soft deletes
+    
+  - content: Implement data models and ORM
+    description: |
+      Create data access layer:
+      - Define ORM models/schemas
+      - Implement model validations
+      - Create model relationships
+      - Add model hooks/middleware
+      - Implement query builders
+      - Add model serializers
+      - Create data repositories
+      - Implement unit of work pattern
+    
+  - content: Build CRUD endpoints
+    description: |
+      Implement core operations:
+      - GET endpoints for listing and detail
+      - POST endpoints for creation
+      - PUT/PATCH for updates
+      - DELETE for removal
+      - Bulk operations support
+      - Nested resource handling
+      - File upload endpoints
+      - Async operation support
+    
+  - content: Add authentication and authorization
+    description: |
+      Secure the API:
+      - Implement JWT authentication
+      - Add OAuth 2.0 support
+      - Create user registration endpoint
+      - Build login/logout endpoints
+      - Implement refresh tokens
+      - Add API key authentication
+      - Role-based access control
+      - Resource-level permissions
+    
+  - content: Implement request validation
+    description: |
+      Validate all inputs:
+      - Request body validation
+      - Query parameter validation
+      - Path parameter validation
+      - Header validation
+      - File upload validation
+      - Custom validation rules
+      - Sanitize inputs
+      - Type coercion
+    
+  - content: Create error handling system
+    description: |
+      Standardize error responses:
+      - Global error handler
+      - Custom error classes
+      - Error code system
+      - Detailed error messages
+      - Stack trace in development
+      - Error logging
+      - Client-friendly errors
+      - Retry-after headers
+    
+  - content: Add pagination and filtering
+    description: |
+      Enhance data retrieval:
+      - Cursor-based pagination
+      - Page-based pagination
+      - Limit/offset support
+      - Field filtering
+      - Search functionality
+      - Sort parameters
+      - Field selection (sparse fieldsets)
+      - Aggregation support
+    
+  - content: Implement caching layer
+    description: |
+      Optimize performance:
+      - Redis cache setup
+      - Cache key strategies
+      - Cache invalidation
+      - ETags implementation
+      - Conditional requests
+      - Cache headers
+      - Database query caching
+      - CDN integration
+    
+  - content: Add rate limiting
+    description: |
+      Protect API resources:
+      - Request rate limiting
+      - User-based limits
+      - IP-based throttling
+      - Endpoint-specific limits
+      - Quota management
+      - Rate limit headers
+      - Graceful degradation
+      - White-listing support
+    
+  - content: Build WebSocket support
+    description: |
+      Add real-time features:
+      - WebSocket server setup
+      - Socket authentication
+      - Room/channel support
+      - Event broadcasting
+      - Connection management
+      - Heartbeat/ping-pong
+      - Reconnection handling
+      - Message queuing
+    
+  - content: Create API documentation
+    description: |
+      Document the API:
+      - OpenAPI/Swagger specification
+      - Interactive API explorer
+      - Code examples in multiple languages
+      - Authentication documentation
+      - Error code reference
+      - Webhook documentation
+      - Postman collection
+      - SDK generation
+    
+  - content: Implement logging and monitoring
+    description: |
+      Add observability:
+      - Structured logging
+      - Request/response logging
+      - Performance metrics
+      - Error tracking
+      - APM integration
+      - Health check endpoints
+      - Metrics endpoints
+      - Distributed tracing
+    
+  - content: Add background jobs
+    description: |
+      Handle async operations:
+      - Job queue setup
+      - Email sending jobs
+      - Report generation
+      - Data processing tasks
+      - Scheduled tasks
+      - Job retry logic
+      - Job monitoring
+      - Dead letter queues
+    
+  - content: Write comprehensive tests
+    description: |
+      Test all components:
+      - Unit tests for logic
+      - Integration tests for API
+      - Database tests
+      - Authentication tests
+      - Validation tests
+      - Performance tests
+      - Contract tests
+      - Load testing
+    
+  - content: Implement API versioning
+    description: |
+      Manage API evolution:
+      - Version in URL vs headers
+      - Deprecation strategy
+      - Migration guides
+      - Backward compatibility
+      - Version documentation
+      - Client version detection
+      - Feature flags
+      - Sunset headers
+    
+  - content: Prepare for deployment
+    description: |
+      Production readiness:
+      - Docker containerization
+      - Environment configuration
+      - Database migrations
+      - CI/CD pipeline
+      - Security audit
+      - Performance optimization
+      - Backup strategies
+      - Monitoring setup

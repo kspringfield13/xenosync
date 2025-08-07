@@ -1,0 +1,248 @@
+name: Modern Frontend Dashboard Development
+description: Build a comprehensive, data-rich dashboard with real-time updates and beautiful visualizations
+
+initial_prompt: |
+  You are building a modern, responsive dashboard application that provides users with comprehensive data visualization and management capabilities. Multiple agents will collaborate on different aspects of the dashboard.
+  
+  Dashboard Features:
+  - Modular widget-based architecture
+  - Real-time data updates
+  - Interactive charts and graphs
+  - Responsive grid layout
+  - User customization options
+  - Data export capabilities
+  - Advanced filtering and search
+  - Role-based views
+  
+  Technology Stack:
+  - React/Vue/Angular with TypeScript
+  - State management (Redux/Vuex/NgRx)
+  - Chart libraries (D3.js, Chart.js, Recharts)
+  - WebSocket for real-time updates
+  - CSS-in-JS or Tailwind CSS
+  
+  Each agent should focus on different dashboard sections while maintaining consistent design patterns.
+
+metadata:
+  recommended_agents: 4
+  recommended_mode: parallel
+  estimated_time: 30
+  difficulty: intermediate
+  tags: [dashboard, frontend, visualization, react, real-time]
+
+steps:
+  - content: Design dashboard architecture
+    description: |
+      Plan the dashboard structure:
+      - Define widget architecture
+      - Design component hierarchy
+      - Plan state management structure
+      - Design data flow patterns
+      - Create responsive grid system
+      - Plan routing structure
+      - Design permission system
+      - Create design system documentation
+    
+  - content: Set up project and dependencies
+    description: |
+      Initialize dashboard project:
+      - Create React/Vue/Angular app
+      - Configure TypeScript
+      - Set up state management
+      - Install UI component library
+      - Configure chart libraries
+      - Set up CSS framework
+      - Configure build tools
+      - Set up testing framework
+    
+  - content: Build core layout components
+    description: |
+      Create foundational UI:
+      - Main dashboard container
+      - Responsive sidebar navigation
+      - Header with user menu
+      - Footer with status info
+      - Breadcrumb navigation
+      - Page layouts templates
+      - Loading skeletons
+      - Error boundaries
+    
+  - content: Create widget system
+    description: |
+      Build modular widgets:
+      - Base widget component
+      - Widget header with actions
+      - Widget configuration
+      - Drag-and-drop support
+      - Resize functionality
+      - Full-screen mode
+      - Widget refresh controls
+      - Widget state persistence
+    
+  - content: Implement data visualization widgets
+    description: |
+      Build chart components:
+      - Line charts for trends
+      - Bar charts for comparisons
+      - Pie/donut charts
+      - Area charts
+      - Scatter plots
+      - Heat maps
+      - Gauge charts
+      - Sparklines
+    
+  - content: Create KPI and metric widgets
+    description: |
+      Build metric displays:
+      - KPI cards with trends
+      - Progress indicators
+      - Comparison metrics
+      - Goal tracking widgets
+      - Performance scores
+      - Status indicators
+      - Alert badges
+      - Mini charts in cards
+    
+  - content: Build data table widget
+    description: |
+      Create advanced tables:
+      - Sortable columns
+      - Column filtering
+      - Pagination
+      - Row selection
+      - Inline editing
+      - Column resizing
+      - Export functionality
+      - Virtual scrolling
+    
+  - content: Implement real-time updates
+    description: |
+      Add live data features:
+      - WebSocket connection
+      - Real-time data streaming
+      - Auto-refresh intervals
+      - Push notifications
+      - Live activity feed
+      - Real-time collaboration
+      - Optimistic UI updates
+      - Connection status indicator
+    
+  - content: Create filter and search system
+    description: |
+      Build data filtering:
+      - Global search bar
+      - Advanced filter panel
+      - Date range picker
+      - Multi-select filters
+      - Saved filter presets
+      - Filter tags display
+      - Clear all filters
+      - URL-based filtering
+    
+  - content: Build user customization
+    description: |
+      Add personalization:
+      - Widget arrangement saving
+      - Theme customization
+      - Dashboard templates
+      - Favorite dashboards
+      - Custom color schemes
+      - Widget visibility toggle
+      - Default view settings
+      - Personal shortcuts
+    
+  - content: Implement data management
+    description: |
+      Handle data operations:
+      - CRUD operations UI
+      - Bulk actions support
+      - Import/export data
+      - Data validation
+      - Undo/redo functionality
+      - Audit trail display
+      - Version history
+      - Conflict resolution
+    
+  - content: Add interactive features
+    description: |
+      Enhance interactivity:
+      - Drill-down navigation
+      - Cross-widget filtering
+      - Tooltip information
+      - Context menus
+      - Keyboard shortcuts
+      - Command palette
+      - Quick actions menu
+      - Gesture support
+    
+  - content: Create notification system
+    description: |
+      Build alerts and notices:
+      - Toast notifications
+      - Alert center
+      - Push notifications
+      - Email preferences
+      - Notification history
+      - Priority levels
+      - Action buttons
+      - Snooze functionality
+    
+  - content: Implement responsive design
+    description: |
+      Optimize for all devices:
+      - Mobile-first approach
+      - Tablet optimizations
+      - Touch interactions
+      - Responsive charts
+      - Mobile navigation
+      - Adaptive layouts
+      - Performance optimization
+      - Offline support
+    
+  - content: Add reporting features
+    description: |
+      Build report generation:
+      - Report builder interface
+      - Scheduled reports
+      - PDF generation
+      - Excel export
+      - Email reports
+      - Report templates
+      - Custom branding
+      - Share reports
+    
+  - content: Implement access control
+    description: |
+      Add security features:
+      - Role-based dashboards
+      - Widget permissions
+      - Data access control
+      - Feature flags
+      - Audit logging
+      - Session management
+      - Secure data handling
+      - API key management
+    
+  - content: Create help and onboarding
+    description: |
+      Build user assistance:
+      - Interactive tour
+      - Contextual help
+      - Documentation links
+      - Video tutorials
+      - Tooltips
+      - FAQ section
+      - Feedback widget
+      - Support chat
+    
+  - content: Test and optimize
+    description: |
+      Ensure quality:
+      - Component unit tests
+      - Integration tests
+      - E2E test scenarios
+      - Performance testing
+      - Accessibility audit
+      - Cross-browser testing
+      - Load testing
+      - Security review

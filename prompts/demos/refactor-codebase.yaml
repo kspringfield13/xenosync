@@ -1,0 +1,195 @@
+name: Comprehensive Codebase Refactoring
+description: Systematically refactor a codebase for better maintainability, performance, and scalability
+
+initial_prompt: |
+  You are part of a refactoring team tasked with improving code quality across the entire codebase. Multiple agents will collaborate on different aspects of the refactoring process.
+  
+  Refactoring Goals:
+  - Improve code organization and structure
+  - Establish consistent patterns and conventions
+  - Enhance performance and scalability
+  - Increase test coverage and reliability
+  - Reduce technical debt
+  - Improve developer experience
+  
+  Each agent should focus on specific areas:
+  - Code organization and architecture
+  - Design patterns and best practices
+  - Performance optimization
+  - Error handling and logging
+  - Testing and documentation
+  
+  Coordinate through work claims to avoid conflicts and ensure comprehensive coverage.
+
+metadata:
+  recommended_agents: 5
+  recommended_mode: collaborative
+  estimated_time: 35
+  difficulty: advanced
+  tags: [refactoring, architecture, performance, quality, patterns]
+
+steps:
+  - content: Analyze current codebase structure
+    description: |
+      Comprehensive codebase assessment:
+      - Map out current architecture and dependencies
+      - Identify code smells and anti-patterns
+      - Measure code complexity metrics
+      - Find duplicate code blocks
+      - Assess test coverage
+      - Document technical debt areas
+      - Create refactoring priority matrix
+    
+  - content: Reorganize project structure
+    description: |
+      Improve code organization:
+      - Implement clean architecture layers
+      - Separate concerns (UI, business logic, data)
+      - Create proper module boundaries
+      - Organize files by feature/domain
+      - Extract shared utilities and constants
+      - Standardize naming conventions
+      - Set up proper index exports
+    
+  - content: Extract and consolidate duplicate code
+    description: |
+      Eliminate code duplication:
+      - Identify repeated code patterns
+      - Extract common functions to utilities
+      - Create shared components/modules
+      - Implement DRY principles
+      - Build reusable abstractions
+      - Consolidate similar implementations
+      - Create generic solutions for common patterns
+    
+  - content: Implement design patterns
+    description: |
+      Apply appropriate patterns:
+      - Implement Repository pattern for data access
+      - Add Factory pattern for object creation
+      - Use Strategy pattern for algorithms
+      - Apply Observer pattern for events
+      - Implement Dependency Injection
+      - Add Builder pattern for complex objects
+      - Use Adapter pattern for integrations
+    
+  - content: Standardize error handling
+    description: |
+      Create consistent error management:
+      - Implement global error handler
+      - Create custom error classes
+      - Add error boundaries (React) or equivalents
+      - Standardize error response formats
+      - Implement retry logic for transient failures
+      - Add comprehensive error logging
+      - Create user-friendly error messages
+    
+  - content: Optimize performance bottlenecks
+    description: |
+      Enhance application performance:
+      - Profile and identify slow operations
+      - Implement caching strategies
+      - Optimize database queries
+      - Add lazy loading and code splitting
+      - Implement pagination and virtualization
+      - Optimize bundle sizes
+      - Add performance monitoring
+    
+  - content: Improve state management
+    description: |
+      Refactor application state:
+      - Centralize state management
+      - Implement proper data flow
+      - Add state persistence where needed
+      - Optimize re-renders and updates
+      - Implement optimistic updates
+      - Add state validation
+      - Create state migration strategies
+    
+  - content: Enhance API layer
+    description: |
+      Standardize API interactions:
+      - Create consistent API client
+      - Implement request/response interceptors
+      - Add automatic retry logic
+      - Standardize error handling
+      - Implement request caching
+      - Add request cancellation
+      - Create type-safe API calls
+    
+  - content: Refactor database operations
+    description: |
+      Optimize data layer:
+      - Implement query builders
+      - Add database migrations
+      - Optimize indexes
+      - Implement connection pooling
+      - Add transaction support
+      - Create data validation layer
+      - Implement soft deletes
+    
+  - content: Modernize build and tooling
+    description: |
+      Update development infrastructure:
+      - Upgrade to latest stable versions
+      - Optimize build configuration
+      - Implement modern bundling
+      - Add hot module replacement
+      - Configure linting and formatting
+      - Set up pre-commit hooks
+      - Implement CI/CD pipelines
+    
+  - content: Add comprehensive testing
+    description: |
+      Improve test coverage:
+      - Write unit tests for all functions
+      - Add integration tests
+      - Implement E2E tests for critical paths
+      - Add performance tests
+      - Create test data factories
+      - Implement snapshot testing
+      - Add mutation testing
+    
+  - content: Improve logging and monitoring
+    description: |
+      Enhance observability:
+      - Implement structured logging
+      - Add correlation IDs
+      - Create log aggregation
+      - Implement metrics collection
+      - Add performance tracking
+      - Create debugging utilities
+      - Set up alerting rules
+    
+  - content: Update documentation
+    description: |
+      Create comprehensive docs:
+      - Document architecture decisions
+      - Create API documentation
+      - Write setup guides
+      - Document coding standards
+      - Create troubleshooting guides
+      - Add inline code documentation
+      - Generate automated docs
+    
+  - content: Implement security improvements
+    description: |
+      Enhance security posture:
+      - Add input validation
+      - Implement proper authentication
+      - Add authorization checks
+      - Sanitize user inputs
+      - Implement rate limiting
+      - Add security headers
+      - Audit dependencies for vulnerabilities
+    
+  - content: Final validation and cleanup
+    description: |
+      Ensure refactoring success:
+      - Run all test suites
+      - Perform regression testing
+      - Validate performance improvements
+      - Check build sizes
+      - Review code coverage
+      - Update deployment scripts
+      - Create migration guide

@@ -1,0 +1,208 @@
+name: Complete Authentication System Implementation
+description: Build a production-ready authentication system with modern security practices
+
+initial_prompt: |
+  You are implementing a comprehensive authentication and authorization system for a web application. Multiple agents will collaborate to build different components of the auth system.
+  
+  System Requirements:
+  - User registration and login
+  - JWT-based authentication
+  - OAuth integration (Google, GitHub, etc.)
+  - Two-factor authentication (2FA)
+  - Password reset via email
+  - Session management
+  - Role-based access control (RBAC)
+  - Security best practices
+  
+  Technology Stack:
+  - Backend: Node.js/Python/Java (adapt to project)
+  - Database: PostgreSQL/MongoDB with proper indexing
+  - Frontend: React/Vue/Angular forms
+  - Security: bcrypt, JWT, OAuth 2.0
+  
+  Each agent should claim specific components to avoid conflicts.
+
+metadata:
+  recommended_agents: 4
+  recommended_mode: parallel
+  estimated_time: 30
+  difficulty: advanced
+  tags: [authentication, security, jwt, oauth, backend, frontend]
+
+steps:
+  - content: Design authentication architecture
+    description: |
+      Plan the complete auth system:
+      - Design database schema for users, roles, sessions
+      - Plan API endpoint structure
+      - Define JWT token strategy
+      - Design refresh token rotation
+      - Plan OAuth integration flow
+      - Create security threat model
+      - Define rate limiting strategy
+    
+  - content: Set up database models and migrations
+    description: |
+      Create data layer:
+      - User model with secure password storage
+      - Role and permission models
+      - Session/refresh token storage
+      - OAuth provider linkage
+      - Audit log tables
+      - Password reset tokens
+      - 2FA secret storage
+      - Add proper indexes for performance
+    
+  - content: Implement user registration system
+    description: |
+      Build registration flow:
+      - Registration endpoint with validation
+      - Email uniqueness checking
+      - Password strength requirements
+      - Email verification system
+      - Welcome email sending
+      - Profile completion flow
+      - GDPR compliance (consent tracking)
+      - Rate limiting for registrations
+    
+  - content: Create login and session management
+    description: |
+      Implement authentication flow:
+      - Login endpoint with rate limiting
+      - JWT token generation
+      - Refresh token implementation
+      - Session storage and management
+      - Remember me functionality
+      - Device tracking and management
+      - Concurrent session limiting
+      - Logout and token revocation
+    
+  - content: Implement OAuth integrations
+    description: |
+      Add social login:
+      - Google OAuth 2.0 integration
+      - GitHub authentication
+      - Facebook login (optional)
+      - OAuth callback handling
+      - Account linking for existing users
+      - Profile data synchronization
+      - OAuth token refresh
+      - Multiple provider support
+    
+  - content: Add two-factor authentication
+    description: |
+      Implement 2FA:
+      - TOTP (Time-based One-Time Password)
+      - QR code generation for apps
+      - Backup codes generation
+      - SMS-based 2FA (optional)
+      - 2FA enforcement policies
+      - Recovery options
+      - Trusted device management
+    
+  - content: Build password reset system
+    description: |
+      Create password recovery:
+      - Forgot password endpoint
+      - Secure token generation
+      - Email with reset link
+      - Token expiration handling
+      - Password reset form
+      - Security questions (optional)
+      - Account recovery options
+      - Notification of password changes
+    
+  - content: Implement authorization and RBAC
+    description: |
+      Add access control:
+      - Role definition system
+      - Permission management
+      - Role assignment to users
+      - Middleware for route protection
+      - Resource-based permissions
+      - Dynamic permission checking
+      - Admin role management UI
+      - Permission inheritance
+    
+  - content: Create authentication middleware
+    description: |
+      Build security layers:
+      - JWT verification middleware
+      - Role checking middleware
+      - API key authentication
+      - CORS configuration
+      - CSRF protection
+      - Request signing (optional)
+      - IP whitelist/blacklist
+      - Suspicious activity detection
+    
+  - content: Build frontend authentication
+    description: |
+      Create UI components:
+      - Login form with validation
+      - Registration form with real-time checks
+      - Password reset flow
+      - 2FA setup interface
+      - OAuth login buttons
+      - Session management UI
+      - Profile management page
+      - Security settings dashboard
+    
+  - content: Implement security features
+    description: |
+      Add protection mechanisms:
+      - Brute force protection
+      - Account lockout policies
+      - Suspicious login detection
+      - Email notifications for security events
+      - Login history tracking
+      - Security headers implementation
+      - Input sanitization
+      - SQL injection prevention
+    
+  - content: Add authentication for APIs
+    description: |
+      Secure API access:
+      - API key generation and management
+      - Rate limiting per API key
+      - OAuth 2.0 for API access
+      - Webhook authentication
+      - API versioning with auth
+      - Documentation for API auth
+      - SDK authentication helpers
+    
+  - content: Create admin dashboard
+    description: |
+      Build management interface:
+      - User management interface
+      - Role and permission editor
+      - Session monitoring
+      - Security audit logs
+      - Account lock/unlock
+      - Password reset for users
+      - OAuth app management
+      - System health monitoring
+    
+  - content: Write comprehensive tests
+    description: |
+      Test all components:
+      - Unit tests for auth logic
+      - Integration tests for flows
+      - Security penetration tests
+      - Load testing for login
+      - Test OAuth flows
+      - Test 2FA scenarios
+      - Test password reset
+      - Test authorization rules
+    
+  - content: Documentation and deployment
+    description: |
+      Finalize the system:
+      - API documentation with examples
+      - Security best practices guide
+      - Integration guide for developers
+      - Admin user manual
+      - Environment configuration
+      - Deployment scripts
+      - Monitoring setup
+      - Incident response plan
