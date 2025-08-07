@@ -362,16 +362,9 @@ The platform uses alien-themed terminology:
 
 </details>
 
-## 📖 Documentation
-
-- [Getting Started Guide](docs/getting-started.md)
-- [Execution Strategies](docs/strategies.md)
-- [API Reference](docs/api.md)
-- [Migration Guide](docs/migration.md)
-
 ## 🤝 Contributing
 
-We welcome contributions from across the galaxy! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions from across the galaxy!
 
 ## 📜 License
 
