@@ -5,7 +5,7 @@
   <img src="assets/xenosync-hero.png" alt="Xenosync Banner" width="100%">
 </p>
 
-[![Version](https://img.shields.io/badge/version-3.0.0-green.svg)](https://github.com/xenosync/xenosync)
+[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](https://github.com/xenosync/xenosync)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
