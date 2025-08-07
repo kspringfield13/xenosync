@@ -1,5 +1,5 @@
-# Xenosync 👽
-### Alien Synchronization Platform for Multi-Agent AI Orchestration
+# Xenosync
+### Synchronization Platform for Multi-Agent AI Orchestration
 
 <p align="center">
   <img src="assets/xenosync-hero.png" alt="Xenosync Banner" width="100%">
@@ -9,11 +9,11 @@
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
-## 🛸 What is Xenosync?
+## What is Xenosync?
 
 Xenosync is an otherworldly orchestration platform that synchronizes multiple AI agents to work in perfect harmony, like an alien hive mind building software.
 
-## ✨ Features
+## Features
 
 - **👽 Alien Hive Mind**: Coordinate up to 20 AI agents simultaneously
 - **🌌 Multiple Sync Modes**: Sequential, Parallel, Collaborative, Distributed, and Hybrid execution
@@ -22,7 +22,7 @@ Xenosync is an otherworldly orchestration platform that synchronizes multiple AI
 - **⚡ Dependency Analysis**: Intelligent task distribution based on dependencies
 - **🎭 Strategy Patterns**: Flexible execution strategies for different project types
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
@@ -54,7 +54,7 @@ xenosync start my_prompt.yaml --agents 3 --mode collaborative
 xenosync start my_prompt.yaml --agents 5 --mode distributed
 ```
 
-### 🎮 Demo Prompts
+### Demo Prompts
 
 Try these ready-to-run demo prompts to see Xenosync in action:
 
@@ -74,7 +74,7 @@ xenosync start prompts/demos/chatbot-personality.yaml --agents 3 --mode collabor
 
 Each demo showcases different multi-agent capabilities and produces immediately usable results!
 
-## 🎯 Execution Modes
+## Execution Modes
 
 ### Sequential Mode
 Traditional single-agent execution for critical, order-dependent tasks.
@@ -91,7 +91,7 @@ Intelligent distribution based on task dependencies and agent workload.
 ### Hybrid Mode
 Dynamically switches between modes based on project phase.
 
-## 🛠️ Commands Reference
+## Commands Reference
 
 <details>
 <summary><b>Click to expand full command reference</b></summary>
@@ -147,7 +147,7 @@ xsync start critical.yaml --mode sequential
 
 </details>
 
-## 🧬 Configuration
+## Configuration
 
 Xenosync configuration is stored in `~/.xenosync/config.yaml`:
 
