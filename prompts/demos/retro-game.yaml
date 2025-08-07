@@ -4,6 +4,97 @@ description: Build a classic Pac-Man inspired arcade game with modern web techno
 initial_prompt: |
   You are building a Pac-Man style arcade game with authentic retro 8-bit aesthetics. This is a single-player maze navigation game where the player collects dots while avoiding ghosts.
   
+  ## CRITICAL: Multi-Agent Coordination Protocol
+
+  ### Before Starting ANY Work:
+
+  **Important**: You are part of a coordinated multi-agent system using SQLite-based coordination. The system automatically manages work claims, conflict resolution, and inter-agent communication through the CoordinationManager.
+
+  1. **Agent Registration Process:**
+     - Your agent is automatically registered with a unique UID and numeric ID
+     - Agent status is tracked in the `agent_registry` table
+     - Your capabilities and metrics are recorded for coordination
+     - No manual registration is required
+
+  2. **Work Claiming System:**
+     - Use the CoordinationManager to claim work on specific files
+     - Claims are stored in SQLite `work_claims` table, not JSON files
+     - The system automatically detects conflicts and prevents overlapping work
+     - Stale claims are auto-released after 2 hours (not 1 hour)
+
+  3. **Coordination Database Structure:**
+     ```
+     SQLite Database (xenosync.db):
+     ├── work_claims          # Active work claims with file locks
+     ├── agent_registry       # Agent status and capabilities  
+     ├── agent_messages       # Inter-agent communication
+     ├── completed_work       # Log of completed tasks
+     └── sessions            # Session metadata
+     ```
+
+  ### Work Coordination Workflow:
+
+  #### Step 1: Check for Available Work
+  1. The system automatically queries active claims to prevent conflicts
+  2. Available work is distributed based on agent capabilities and current workload
+  3. Conflicts are resolved automatically - no manual checking required
+
+  #### Step 2: Claim Work Through CoordinationManager
+  ```python
+  # System automatically handles this - agents don't need to manually implement
+  claim_id = coordination_manager.claim_work(
+      agent_uid=your_agent_uid,
+      session_id=current_session_id, 
+      files=["list", "of", "files", "to", "modify"],
+      description="Description of work being performed",
+      metadata={"estimated_duration": "minutes", "priority": "high"}
+  )
+  ```
+
+  #### Step 3: Work Status Management
+  - **Status Values**: Use WorkStatus enum values:
+    - `CLAIMED`: Work has been claimed but not started
+    - `IN_PROGRESS`: Actively working on the claim
+    - `COMPLETED`: Work finished successfully
+    - `FAILED`: Work encountered errors
+    - `RELEASED`: Work was abandoned or reassigned
+
+  #### Step 4: Update Work Progress
+  - Update your work status automatically through the system
+  - Status updates are tracked with timestamps
+  - Other agents are notified of progress through the messaging system
+
+  #### Step 5: Inter-Agent Communication
+  - Send messages to coordinate with other agents:
+    - Broadcast messages to all agents
+    - Direct messages to specific agents
+    - Message types: work_claim, work_release, status_update, help_request
+  - Messages are stored in `agent_messages` table
+
+  #### Step 6: Complete Work
+  1. Update work status to `COMPLETED` or `FAILED`
+  2. System logs completion in `completed_work` table with:
+     - Files modified
+     - Duration
+     - Success status
+     - Any error messages
+  3. Work claims are automatically released
+
+  ### Conflict Resolution:
+  - **Automatic Detection**: System detects file conflicts before allowing work claims
+  - **Stale Claim Cleanup**: Claims older than 2 hours are automatically released
+  - **Load Balancing**: Work is distributed based on current agent workloads
+  - **Priority System**: High-priority work can preempt lower-priority tasks
+
+  ### Key Coordination Principles:
+  1. **Trust the System**: The CoordinationManager handles most coordination automatically
+  2. **Communicate Actively**: Use the messaging system to coordinate complex work
+  3. **Update Status Frequently**: Keep your work status current for effective coordination
+  4. **Respect Claims**: Never work on files claimed by other agents
+  5. **Handle Failures Gracefully**: Update status to FAILED and release claims when encountering issues
+
+  **Remember: We are working as a coordinated hive mind through the SQLite-based coordination system. The database handles conflict resolution, work distribution, and communication automatically. Stay organized, trust the system, and focus on your assigned work while the coordination layer manages the complex multi-agent orchestration.**
+  
   The game should feature:
   - Classic maze gameplay with dot collection
   - Four unique ghosts with different AI behaviors
