@@ -1,3 +1,5 @@
+![Xenosync](assets/xenosync-hero.png)
+
 # Xenosync
 ### Multi-Agent AI Orchestration Platform
 
