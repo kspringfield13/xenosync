@@ -14,11 +14,10 @@ from datetime import datetime
 from typing import Optional
 
 # Import our modules
-from .config import Config, SyncProfile
+from .config import Config
 from .orchestrator import XenosyncOrchestrator
-from .session_manager import SessionManager
+from .file_session_manager import SessionManager
 from .prompt_manager import PromptManager
-from .monitor import XenosyncMonitor
 from .utils import setup_logging, print_banner
 
 # Version
@@ -28,9 +27,8 @@ __version__ = "2.0.0"
 @click.group()
 @click.version_option(version=__version__)
 @click.option('--config', '-c', type=click.Path(), help='Configuration file path')
-@click.option('--profile', '-p', type=str, help='Build profile (fast/normal/careful)')
 @click.pass_context
-def cli(ctx, config, profile):
+def cli(ctx, config):
     """Xenosync - Alien Synchronization Platform"""
     ctx.ensure_object(dict)
     
@@ -38,43 +36,43 @@ def cli(ctx, config, profile):
     config_path = Path(config) if config else Path.home() / '.xenosync' / 'config.yaml'
     ctx.obj['config'] = Config.load(config_path)
     
-    # Apply profile if specified
-    if profile:
-        ctx.obj['config'].apply_profile(profile)
-    
     # Setup logging
     setup_logging(ctx.obj['config'].log_level)
 
 
 @cli.command()
 @click.argument('prompt_file', required=False)
-@click.option('--speed', '-s', type=click.Choice(['fast', 'normal', 'careful']), 
-              default='normal', help='Build speed profile')
-@click.option('--agents', '-a', type=int, default=1, 
-              help='Number of agents to run (1-20)')
-@click.option('--mode', '-m', type=click.Choice(['sequential', 'parallel', 'collaborative', 'distributed', 'hybrid']), 
-              default='sequential', help='Execution mode for multi-agent runs')
+@click.option('--agents', '-a', type=int, default=2, 
+              help='Number of agents to run (2-20)')
+@click.option('--mode', '-m', type=click.Choice(['parallel', 'collaborative']), 
+              default='parallel', help='Execution mode: parallel (divide tasks) or collaborative (shared pool)')
 @click.option('--resume', '-r', type=str, help='Resume a previous session')
-@click.option('--dry-run', is_flag=True, help='Validate prompt without starting build')
+@click.option('--dry-run', is_flag=True, help='Validate prompt without starting')
+@click.option('--no-terminal', is_flag=True, help='Disable automatic terminal opening')
 @click.pass_context
-def start(ctx, prompt_file, speed, agents, mode, resume, dry_run):
-    """Start a new sync session"""
-    config = ctx.obj['config']
-    config.apply_profile(speed)
+def start(ctx, prompt_file, agents, mode, resume, dry_run, no_terminal):
+    """Start a new multi-agent sync session
     
-    # Validate agent count
-    if agents < 1 or agents > 20:
-        click.echo("Error: Number of agents must be between 1 and 20", err=True)
+    Xenosync orchestrates multiple AI agents to work on tasks either in:
+    - PARALLEL mode: Tasks are divided among agents upfront
+    - COLLABORATIVE mode: Agents claim tasks dynamically from a shared pool
+    """
+    config = ctx.obj['config']
+    
+    # Validate agent count (minimum 2 for multi-agent platform)
+    if agents < 2:
+        click.echo("Error: Minimum 2 agents required for multi-agent execution", err=True)
+        click.echo("Tip: Use --agents to specify number of agents (2-20)", err=True)
         sys.exit(1)
     
-    # If multiple agents requested but mode is sequential, warn user
-    if agents > 1 and mode == 'sequential':
-        click.echo("Warning: Sequential mode with multiple agents will run agents one at a time")
+    if agents > 20:
+        click.echo("Error: Maximum 20 agents supported", err=True)
+        sys.exit(1)
     
-    # Store multi-agent settings in config
-    config.set('multi_agent_enabled', agents > 1)
+    # Store settings in config
     config.set('num_agents', agents)
     config.set('execution_mode', mode)
+    config.set('auto_open_terminal', not no_terminal)
     
     # Initialize managers
     session_manager = SessionManager(config)
@@ -110,10 +108,8 @@ def start(ctx, prompt_file, speed, agents, mode, resume, dry_run):
         click.echo(f"Session ID: {session.id}")
         click.echo(f"Project: {prompt.name}")
         click.echo(f"Steps: {len(prompt.steps)}")
-        click.echo(f"Speed: {speed}")
-        if agents > 1:
-            click.echo(f"Agents: {agents}")
-            click.echo(f"Mode: {mode}")
+        click.echo(f"Agents: {agents}")
+        click.echo(f"Mode: {mode}")
         
         # Start orchestrator
         orchestrator = XenosyncOrchestrator(config, session_manager, prompt_manager)
@@ -122,22 +118,50 @@ def start(ctx, prompt_file, speed, agents, mode, resume, dry_run):
         try:
             asyncio.run(orchestrator.run(session, prompt))
         except KeyboardInterrupt:
-            # Handle interrupt gracefully
+            # Handle interrupt gracefully with tmux cleanup
             click.echo("\n\n" + "=" * 60)
             click.echo("Shutting down agents...")
-            orchestrator.interrupt()
             click.echo("=" * 60)
+            
+            # Ensure tmux sessions are cleaned up
+            try:
+                from xenosync.tmux_manager import TmuxManager
+                click.echo("Cleaning up tmux sessions...")
+                TmuxManager.kill_xenosync_sessions()
+                click.echo("Cleanup completed.")
+            except Exception as e:
+                click.echo(f"Warning: Failed to clean up tmux sessions: {e}", err=True)
         
     except KeyboardInterrupt:
         click.echo("\n\nBuild interrupted by user")
+        
+        # Update session status if exists
         if 'session' in locals():
-            from xenosync.session_manager import SessionStatus
+            from xenosync.file_session_manager import SessionStatus
             session_manager.update_session_status(session.id, SessionStatus.INTERRUPTED)
+        
+        # Ensure tmux cleanup on outer interrupt as well
+        try:
+            from xenosync.tmux_manager import TmuxManager
+            click.echo("Performing final cleanup...")
+            TmuxManager.kill_xenosync_sessions()
+        except Exception as e:
+            click.echo(f"Warning: Failed to clean up tmux sessions: {e}", err=True)
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
+        
+        # Update session status if exists
         if 'session' in locals():
-            from xenosync.session_manager import SessionStatus
+            from xenosync.file_session_manager import SessionStatus
             session_manager.update_session_status(session.id, SessionStatus.FAILED)
+        
+        # Cleanup tmux sessions on error as well
+        try:
+            from xenosync.tmux_manager import TmuxManager
+            TmuxManager.kill_xenosync_sessions()
+        except Exception:
+            pass  # Don't mask the original error with cleanup errors
+        
         sys.exit(1)
 
 
@@ -171,19 +195,6 @@ def status(ctx, session, detailed):
 
 
 @cli.command()
-@click.option('--port', '-p', type=int, default=8080, help='Port for web interface')
-@click.option('--host', '-h', type=str, default='localhost', help='Host to bind to')
-@click.pass_context
-def monitor(ctx, port, host):
-    """Start the web-based monitoring dashboard"""
-    config = ctx.obj['config']
-    monitor = XenosyncMonitor(config)
-    
-    click.echo(f"Starting monitoring dashboard at http://{host}:{port}")
-    monitor.start(host, port)
-
-
-@cli.command()
 @click.argument('session_id', required=False)
 @click.option('--hive', is_flag=True, help='Attach to multi-agent hive session')
 @click.pass_context
@@ -201,12 +212,21 @@ def attach(ctx, session_id, hive):
             # Check for xenosync hive sessions
             result = subprocess.run(['tmux', 'list-sessions'], capture_output=True, text=True)
             if result.returncode == 0:
-                # Look for xenosync-hive or xenosync_collective sessions
-                hive_sessions = [s for s in result.stdout.splitlines() 
-                               if 'xenosync' in s.lower() and ('hive' in s or 'collective' in s)]
-                if hive_sessions:
-                    # Get the most recent hive session
-                    session_name = hive_sessions[0].split(':')[0]
+                # Look for xenosync-hive or other xenosync sessions
+                all_xenosync_sessions = [s for s in result.stdout.splitlines() 
+                                       if 'xenosync' in s.lower()]
+                
+                # Prefer xenosync-hive if it exists
+                hive_session = next((s for s in all_xenosync_sessions if 'xenosync-hive' in s), None)
+                if hive_session:
+                    session_name = hive_session.split(':')[0]
+                elif all_xenosync_sessions:
+                    # Fall back to any xenosync session
+                    session_name = all_xenosync_sessions[0].split(':')[0]
+                else:
+                    session_name = None
+                
+                if session_name:
                     click.echo(f"Attaching to hive session: {session_name}")
                     click.echo("Navigation: Ctrl+B,1 for agents | Ctrl+B,d to detach")
                     subprocess.run(['tmux', 'attach-session', '-t', session_name])

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAC-MAN Arcade</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="arcade-cabinet">
+        <div class="cabinet-top">
+            <div class="marquee">
+                <h1 class="game-title">PAC-MAN</h1>
+                <div class="neon-glow"></div>
+            </div>
+        </div>
+        
+        <div class="screen-bezel">
+            <div class="screen-container">
+                <canvas id="gameCanvas" width="448" height="496"></canvas>
+                
+                <div id="ui-overlay">
+                    <div id="start-screen" class="game-screen active">
+                        <h2>PAC-MAN</h2>
+                        <div class="blink">PRESS ENTER TO START</div>
+                        <div class="high-score">HIGH SCORE: <span id="high-score-value">0</span></div>
+                        <div class="instructions">
+                            <p>ARROW KEYS TO MOVE</p>
+                            <p>P TO PAUSE</p>
+                            <p>ESC FOR MENU</p>
+                        </div>
+                        <div class="credits">© 2024 ARCADE CLASSIC</div>
+                    </div>
+                    
+                    <div id="game-over-screen" class="game-screen">
+                        <h2>GAME OVER</h2>
+                        <div class="final-score">SCORE: <span id="final-score">0</span></div>
+                        <div class="blink">PRESS ENTER TO RESTART</div>
+                    </div>
+                    
+                    <div id="pause-screen" class="game-screen">
+                        <h2>PAUSED</h2>
+                        <div class="blink">PRESS P TO CONTINUE</div>
+                    </div>
+                    
+                    <div id="level-transition-screen" class="game-screen">
+                        <h2>LEVEL <span id="level-number">1</span></h2>
+                        <div class="ready-message">GET READY!</div>
+                    </div>
+                </div>
+                
+                <div id="game-hud">
+                    <div class="score-display">
+                        <span class="label">SCORE</span>
+                        <span id="score">0</span>
+                    </div>
+                    <div class="high-score-display">
+                        <span class="label">HIGH</span>
+                        <span id="high-score">0</span>
+                    </div>
+                    <div class="lives-display">
+                        <span class="label">LIVES</span>
+                        <span id="lives-container"></span>
+                    </div>
+                    <div class="level-display">
+                        <span class="label">LEVEL</span>
+                        <span id="level">1</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="cabinet-controls">
+            <div class="control-panel">
+                <div class="joystick-area">
+                    <div class="joystick"></div>
+                </div>
+                <div class="button-area">
+                    <button class="arcade-button start-button">START</button>
+                    <button class="arcade-button coin-button">COIN</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/config.js"></script>
+    <script src="js/assetManager.js"></script>
+    <script src="js/gameLoop.js"></script>
+    <script src="js/ghost.js"></script>
+    <script src="js/ghostAI.js"></script>
+    <script src="js/gameStates.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

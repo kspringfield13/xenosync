@@ -1,8 +1,7 @@
 """
-Session management with SQLite backend
+File-based session management using JSON files
 """
 
-import sqlite3
 import json
 import logging
 from datetime import datetime, timedelta
@@ -14,6 +13,11 @@ import uuid
 
 from .config import Config
 from .exceptions import SessionError
+from .file_utils import (
+    read_json_file, write_json_file, safe_append_line,
+    update_json_file, ensure_directory, JSONFileStore,
+    rotate_file, FileLock
+)
 
 
 logger = logging.getLogger(__name__)
@@ -62,6 +66,24 @@ class Session:
         if self.total_steps == 0:
             return 0
         return int((self.current_step / self.total_steps) * 100)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        data = asdict(self)
+        data['status'] = self.status.value
+        data['started_at'] = self.started_at.isoformat()
+        if self.ended_at:
+            data['ended_at'] = self.ended_at.isoformat()
+        return data
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Session':
+        """Create from dictionary"""
+        data['status'] = SessionStatus(data['status'])
+        data['started_at'] = datetime.fromisoformat(data['started_at'])
+        if data.get('ended_at'):
+            data['ended_at'] = datetime.fromisoformat(data['ended_at'])
+        return cls(**data)
 
 
 @dataclass
@@ -81,6 +103,26 @@ class SyncStep:
         if self.started_at and self.completed_at:
             return self.completed_at - self.started_at
         return None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        data = asdict(self)
+        data['status'] = self.status.value
+        if self.started_at:
+            data['started_at'] = self.started_at.isoformat()
+        if self.completed_at:
+            data['completed_at'] = self.completed_at.isoformat()
+        return data
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'SyncStep':
+        """Create from dictionary"""
+        data['status'] = StepStatus(data['status'])
+        if data.get('started_at'):
+            data['started_at'] = datetime.fromisoformat(data['started_at'])
+        if data.get('completed_at'):
+            data['completed_at'] = datetime.fromisoformat(data['completed_at'])
+        return cls(**data)
 
 
 @dataclass
@@ -90,67 +132,39 @@ class SessionEvent:
     timestamp: datetime
     event_type: str
     data: Dict[str, Any]
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'session_id': self.session_id,
+            'timestamp': self.timestamp.isoformat(),
+            'event_type': self.event_type,
+            'data': self.data
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'SessionEvent':
+        """Create from dictionary"""
+        data['timestamp'] = datetime.fromisoformat(data['timestamp'])
+        return cls(**data)
 
 
-class SessionManager:
-    """Manages sync sessions with SQLite backend"""
+class FileSessionManager:
+    """Manages sync sessions with file-based backend"""
     
     def __init__(self, config: Config):
         self.config = config
-        self.db_path = config.database_path
-        self._init_database()
-    
-    def _init_database(self):
-        """Initialize SQLite database"""
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.sessions_dir = config.sessions_dir
+        self.sessions_dir.mkdir(parents=True, exist_ok=True)
         
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS sessions (
-                    id TEXT PRIMARY KEY,
-                    prompt_file TEXT NOT NULL,
-                    project_name TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    started_at TIMESTAMP NOT NULL,
-                    ended_at TIMESTAMP,
-                    current_step INTEGER DEFAULT 0,
-                    total_steps INTEGER NOT NULL,
-                    error TEXT,
-                    metadata TEXT
-                )
-            ''')
-            
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS build_steps (
-                    session_id TEXT NOT NULL,
-                    step_number INTEGER NOT NULL,
-                    description TEXT,
-                    content TEXT,
-                    status TEXT NOT NULL,
-                    started_at TIMESTAMP,
-                    completed_at TIMESTAMP,
-                    error TEXT,
-                    PRIMARY KEY (session_id, step_number),
-                    FOREIGN KEY (session_id) REFERENCES sessions(id)
-                )
-            ''')
-            
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS session_events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    session_id TEXT NOT NULL,
-                    timestamp TIMESTAMP NOT NULL,
-                    event_type TEXT NOT NULL,
-                    data TEXT,
-                    FOREIGN KEY (session_id) REFERENCES sessions(id)
-                )
-            ''')
-            
-            # Create indices
-            conn.execute('CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)')
-            conn.execute('CREATE INDEX IF NOT EXISTS idx_events_session ON session_events(session_id)')
-            
-            conn.commit()
+        # Create sessions index file
+        self.index_path = self.sessions_dir / 'sessions_index.json'
+        if not self.index_path.exists():
+            write_json_file(self.index_path, {})
+    
+    def get_session_path(self, session_id: str) -> Path:
+        """Get path for session directory"""
+        return self.sessions_dir / session_id
     
     def create_session(self, prompt) -> Session:
         """Create a new sync session"""
@@ -166,36 +180,39 @@ class SessionManager:
             total_steps=len(prompt.steps),
             error=None,
             metadata={
-                'prompt_format': prompt.format,
-                'profile': self.config.profile.name
+                'prompt_format': prompt.format
             }
         )
         
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
-                INSERT INTO sessions 
-                (id, prompt_file, project_name, status, started_at, ended_at, 
-                 current_step, total_steps, error, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                session.id, session.prompt_file, session.project_name,
-                session.status.value, session.started_at, session.ended_at,
-                session.current_step, session.total_steps, session.error,
-                json.dumps(session.metadata)
-            ))
-            
-            # Insert sync steps
-            for i, step in enumerate(prompt.steps, 1):
-                conn.execute('''
-                    INSERT INTO build_steps
-                    (session_id, step_number, description, content, status)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (
-                    session_id, i, step.description, step.content,
-                    StepStatus.PENDING.value
-                ))
-            
-            conn.commit()
+        # Create session directory
+        session_path = self.get_session_path(session_id)
+        ensure_directory(session_path)
+        
+        # Save session data
+        session_file = session_path / 'session.json'
+        write_json_file(session_file, session.to_dict())
+        
+        # Save steps
+        steps = []
+        for i, step in enumerate(prompt.steps, 1):
+            sync_step = SyncStep(
+                session_id=session_id,
+                step_number=i,
+                description=step.description or '',
+                content=step.content,
+                status=StepStatus.PENDING,
+                started_at=None,
+                completed_at=None,
+                error=None
+            )
+            steps.append(sync_step.to_dict())
+        
+        steps_file = session_path / 'steps.json'
+        write_json_file(steps_file, steps)
+        
+        # Create events log
+        events_file = session_path / 'events.log'
+        events_file.touch()
         
         # Log session creation
         self.log_event(session_id, 'session_created', {
@@ -203,37 +220,43 @@ class SessionManager:
             'total_steps': len(prompt.steps)
         })
         
+        # Update sessions index
+        self._update_index(session_id, 'add', {
+            'project_name': prompt.name,
+            'status': SessionStatus.ACTIVE.value,
+            'started_at': datetime.now().isoformat()
+        })
+        
         logger.info(f"Created session {session_id} for {prompt.name}")
         return session
     
+    def _update_index(self, session_id: str, action: str, data: Optional[Dict] = None):
+        """Update sessions index"""
+        def updater(index):
+            if action == 'add':
+                index[session_id] = data or {}
+            elif action == 'update' and session_id in index:
+                index[session_id].update(data or {})
+            elif action == 'remove' and session_id in index:
+                del index[session_id]
+            return index
+        
+        update_json_file(self.index_path, updater)
+    
     def get_session(self, session_id: str) -> Optional[Session]:
         """Get session by ID"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                'SELECT * FROM sessions WHERE id = ?', (session_id,)
-            )
-            row = cursor.fetchone()
-            
-            if not row:
-                return None
-            
-            return self._session_from_row(row)
-    
-    def _session_from_row(self, row: sqlite3.Row) -> Session:
-        """Convert database row to Session object"""
-        return Session(
-            id=row['id'],
-            prompt_file=row['prompt_file'],
-            project_name=row['project_name'],
-            status=SessionStatus(row['status']),
-            started_at=datetime.fromisoformat(row['started_at']),
-            ended_at=datetime.fromisoformat(row['ended_at']) if row['ended_at'] else None,
-            current_step=row['current_step'],
-            total_steps=row['total_steps'],
-            error=row['error'],
-            metadata=json.loads(row['metadata']) if row['metadata'] else {}
-        )
+        session_path = self.get_session_path(session_id)
+        session_file = session_path / 'session.json'
+        
+        if not session_file.exists():
+            return None
+        
+        try:
+            data = read_json_file(session_file)
+            return Session.from_dict(data)
+        except Exception as e:
+            logger.error(f"Failed to load session {session_id}: {e}")
+            return None
     
     def get_active_sessions(self) -> List[Session]:
         """Get all active sessions"""
@@ -241,36 +264,63 @@ class SessionManager:
     
     def get_all_sessions(self, limit: int = 100) -> List[Session]:
         """Get all sessions with limit"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                'SELECT * FROM sessions ORDER BY started_at DESC LIMIT ?',
-                (limit,)
-            )
-            return [self._session_from_row(row) for row in cursor]
+        index = read_json_file(self.index_path, {})
+        
+        # Sort by started_at descending
+        sorted_sessions = sorted(
+            index.items(),
+            key=lambda x: x[1].get('started_at', ''),
+            reverse=True
+        )[:limit]
+        
+        sessions = []
+        for session_id, _ in sorted_sessions:
+            session = self.get_session(session_id)
+            if session:
+                sessions.append(session)
+        
+        return sessions
     
     def _get_sessions_by_status(self, status: SessionStatus) -> List[Session]:
         """Get sessions by status"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                'SELECT * FROM sessions WHERE status = ? ORDER BY started_at DESC',
-                (status.value,)
-            )
-            return [self._session_from_row(row) for row in cursor]
+        index = read_json_file(self.index_path, {})
+        sessions = []
+        
+        for session_id, info in index.items():
+            if info.get('status') == status.value:
+                session = self.get_session(session_id)
+                if session:
+                    sessions.append(session)
+        
+        return sorted(sessions, key=lambda s: s.started_at, reverse=True)
     
     def update_session_status(self, session_id: str, status: SessionStatus, 
                             error: Optional[str] = None):
         """Update session status"""
+        session_path = self.get_session_path(session_id)
+        session_file = session_path / 'session.json'
+        
+        if not session_file.exists():
+            logger.error(f"Session {session_id} not found")
+            return
+        
         ended_at = datetime.now() if status != SessionStatus.ACTIVE else None
         
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
-                UPDATE sessions 
-                SET status = ?, ended_at = ?, error = ?
-                WHERE id = ?
-            ''', (status.value, ended_at, error, session_id))
-            conn.commit()
+        def updater(data):
+            data['status'] = status.value
+            if ended_at:
+                data['ended_at'] = ended_at.isoformat()
+            if error:
+                data['error'] = error
+            return data
+        
+        update_json_file(session_file, updater)
+        
+        # Update index
+        self._update_index(session_id, 'update', {
+            'status': status.value,
+            'ended_at': ended_at.isoformat() if ended_at else None
+        })
         
         self.log_event(session_id, 'status_changed', {
             'new_status': status.value,
@@ -279,32 +329,40 @@ class SessionManager:
     
     def update_step_progress(self, session_id: str, step_number: int, status: str):
         """Update build step progress"""
+        session_path = self.get_session_path(session_id)
+        steps_file = session_path / 'steps.json'
+        
+        if not steps_file.exists():
+            logger.error(f"Steps file not found for session {session_id}")
+            return
+        
         step_status = StepStatus(status)
         now = datetime.now()
         
-        with sqlite3.connect(self.db_path) as conn:
-            if step_status == StepStatus.IN_PROGRESS:
-                conn.execute('''
-                    UPDATE build_steps 
-                    SET status = ?, started_at = ?
-                    WHERE session_id = ? AND step_number = ?
-                ''', (step_status.value, now, session_id, step_number))
-            elif step_status in [StepStatus.COMPLETED, StepStatus.FAILED]:
-                conn.execute('''
-                    UPDATE build_steps 
-                    SET status = ?, completed_at = ?
-                    WHERE session_id = ? AND step_number = ?
-                ''', (step_status.value, now, session_id, step_number))
+        def updater(steps):
+            for step in steps:
+                if step['step_number'] == step_number:
+                    step['status'] = step_status.value
+                    
+                    if step_status == StepStatus.IN_PROGRESS:
+                        step['started_at'] = now.isoformat()
+                    elif step_status in [StepStatus.COMPLETED, StepStatus.FAILED]:
+                        step['completed_at'] = now.isoformat()
+                    
+                    break
+            return steps
+        
+        update_json_file(steps_file, updater)
+        
+        # Update session current step if in progress
+        if step_status == StepStatus.IN_PROGRESS:
+            session_file = session_path / 'session.json'
             
-            # Update session current step
-            if step_status == StepStatus.IN_PROGRESS:
-                conn.execute('''
-                    UPDATE sessions 
-                    SET current_step = ?
-                    WHERE id = ?
-                ''', (step_number, session_id))
+            def session_updater(data):
+                data['current_step'] = step_number
+                return data
             
-            conn.commit()
+            update_json_file(session_file, session_updater)
         
         self.log_event(session_id, 'step_progress', {
             'step_number': step_number,
@@ -313,58 +371,57 @@ class SessionManager:
     
     def log_event(self, session_id: str, event_type: str, data: Dict[str, Any]):
         """Log a session event"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
-                INSERT INTO session_events (session_id, timestamp, event_type, data)
-                VALUES (?, ?, ?, ?)
-            ''', (session_id, datetime.now(), event_type, json.dumps(data)))
-            conn.commit()
+        session_path = self.get_session_path(session_id)
+        events_file = session_path / 'events.log'
+        
+        event = SessionEvent(
+            session_id=session_id,
+            timestamp=datetime.now(),
+            event_type=event_type,
+            data=data
+        )
+        
+        # Append to log file
+        log_line = json.dumps(event.to_dict(), default=str)
+        safe_append_line(events_file, log_line)
     
     def get_session_events(self, session_id: str) -> List[SessionEvent]:
         """Get all events for a session"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute('''
-                SELECT * FROM session_events 
-                WHERE session_id = ? 
-                ORDER BY timestamp
-            ''', (session_id,))
-            
-            events = []
-            for row in cursor:
-                events.append(SessionEvent(
-                    session_id=row['session_id'],
-                    timestamp=datetime.fromisoformat(row['timestamp']),
-                    event_type=row['event_type'],
-                    data=json.loads(row['data']) if row['data'] else {}
-                ))
-            
-            return events
+        session_path = self.get_session_path(session_id)
+        events_file = session_path / 'events.log'
+        
+        if not events_file.exists():
+            return []
+        
+        events = []
+        try:
+            with open(events_file, 'r') as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            data = json.loads(line)
+                            events.append(SessionEvent.from_dict(data))
+                        except json.JSONDecodeError:
+                            continue
+        except Exception as e:
+            logger.error(f"Failed to read events for session {session_id}: {e}")
+        
+        return events
     
     def get_session_steps(self, session_id: str) -> List[SyncStep]:
         """Get all steps for a session"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute('''
-                SELECT * FROM build_steps 
-                WHERE session_id = ? 
-                ORDER BY step_number
-            ''', (session_id,))
-            
-            steps = []
-            for row in cursor:
-                steps.append(SyncStep(
-                    session_id=row['session_id'],
-                    step_number=row['step_number'],
-                    description=row['description'],
-                    content=row['content'],
-                    status=StepStatus(row['status']),
-                    started_at=datetime.fromisoformat(row['started_at']) if row['started_at'] else None,
-                    completed_at=datetime.fromisoformat(row['completed_at']) if row['completed_at'] else None,
-                    error=row['error']
-                ))
-            
-            return steps
+        session_path = self.get_session_path(session_id)
+        steps_file = session_path / 'steps.json'
+        
+        if not steps_file.exists():
+            return []
+        
+        try:
+            steps_data = read_json_file(steps_file, [])
+            return [SyncStep.from_dict(step) for step in steps_data]
+        except Exception as e:
+            logger.error(f"Failed to load steps for session {session_id}: {e}")
+            return []
     
     def archive_session(self, session_id: str, status: str = 'completed'):
         """Archive a session"""
@@ -373,21 +430,16 @@ class SessionManager:
         
         # Create archive directory if needed
         if self.config.get('archive_completed', True):
-            archive_dir = self.config.sessions_dir / 'archive' / session_id
+            archive_dir = self.sessions_dir / 'archive' / session_id
             archive_dir.mkdir(parents=True, exist_ok=True)
             
-            # Export session data
-            session = self.get_session(session_id)
-            if session:
-                export_data = {
-                    'session': asdict(session),
-                    'steps': [asdict(step) for step in self.get_session_steps(session_id)],
-                    'events': [asdict(event) for event in self.get_session_events(session_id)]
-                }
-                
-                export_file = archive_dir / 'session_data.json'
-                with open(export_file, 'w') as f:
-                    json.dump(export_data, f, indent=2, default=str)
+            # Copy session files to archive
+            session_path = self.get_session_path(session_id)
+            if session_path.exists():
+                import shutil
+                for file in session_path.iterdir():
+                    if file.is_file():
+                        shutil.copy2(file, archive_dir / file.name)
         
         logger.info(f"Archived session {session_id} with status {status}")
     
@@ -433,51 +485,49 @@ class SessionManager:
     
     def count_sessions(self) -> int:
         """Get total number of sessions"""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute('SELECT COUNT(*) FROM sessions')
-            return cursor.fetchone()[0]
+        index = read_json_file(self.index_path, {})
+        return len(index)
     
     def get_statistics(self, days: int = 30) -> Dict[str, Any]:
         """Get session statistics"""
         cutoff_date = datetime.now() - timedelta(days=days)
+        index = read_json_file(self.index_path, {})
         
-        with sqlite3.connect(self.db_path) as conn:
-            # Total sessions
-            cursor = conn.execute(
-                'SELECT COUNT(*) FROM sessions WHERE started_at > ?',
-                (cutoff_date,)
-            )
-            total_sessions = cursor.fetchone()[0]
-            
-            # Status breakdown
-            cursor = conn.execute('''
-                SELECT status, COUNT(*) 
-                FROM sessions 
-                WHERE started_at > ?
-                GROUP BY status
-            ''', (cutoff_date,))
-            status_counts = dict(cursor.fetchall())
-            
-            # Average duration
-            cursor = conn.execute('''
-                SELECT AVG(julianday(ended_at) - julianday(started_at)) * 24 * 60
-                FROM sessions 
-                WHERE status = ? AND started_at > ? AND ended_at IS NOT NULL
-            ''', (SessionStatus.COMPLETED.value, cutoff_date))
-            avg_duration_minutes = cursor.fetchone()[0] or 0
-            
-            # Success rate
-            completed = status_counts.get(SessionStatus.COMPLETED.value, 0)
-            failed = status_counts.get(SessionStatus.FAILED.value, 0)
-            success_rate = (completed / (completed + failed) * 100) if (completed + failed) > 0 else 0
-            
-            return {
-                'total_sessions': total_sessions,
-                'status_breakdown': status_counts,
-                'average_duration_minutes': round(avg_duration_minutes, 1),
-                'success_rate': round(success_rate, 1),
-                'period_days': days
-            }
+        # Filter sessions by date
+        recent_sessions = {}
+        for session_id, info in index.items():
+            if 'started_at' in info:
+                started_at = datetime.fromisoformat(info['started_at'])
+                if started_at > cutoff_date:
+                    recent_sessions[session_id] = info
+        
+        # Count by status
+        status_counts = {}
+        for info in recent_sessions.values():
+            status = info.get('status', 'unknown')
+            status_counts[status] = status_counts.get(status, 0) + 1
+        
+        # Calculate average duration for completed sessions
+        durations = []
+        for session_id in recent_sessions:
+            session = self.get_session(session_id)
+            if session and session.status == SessionStatus.COMPLETED and session.duration:
+                durations.append(session.duration.total_seconds() / 60)  # minutes
+        
+        avg_duration_minutes = sum(durations) / len(durations) if durations else 0
+        
+        # Success rate
+        completed = status_counts.get(SessionStatus.COMPLETED.value, 0)
+        failed = status_counts.get(SessionStatus.FAILED.value, 0)
+        success_rate = (completed / (completed + failed) * 100) if (completed + failed) > 0 else 0
+        
+        return {
+            'total_sessions': len(recent_sessions),
+            'status_breakdown': status_counts,
+            'average_duration_minutes': round(avg_duration_minutes, 1),
+            'success_rate': round(success_rate, 1),
+            'period_days': days
+        }
     
     def generate_summary(self, session_id: str, format: str = 'markdown') -> Optional[str]:
         """Generate session summary in specified format"""
@@ -492,9 +542,9 @@ class SessionManager:
             return self._generate_markdown_summary(session, steps, events)
         elif format == 'json':
             data = {
-                'session': asdict(session),
-                'steps': [asdict(step) for step in steps],
-                'events': [asdict(event) for event in events]
+                'session': session.to_dict(),
+                'steps': [step.to_dict() for step in steps],
+                'events': [event.to_dict() for event in events]
             }
             return json.dumps(data, indent=2, default=str)
         elif format == 'html':
@@ -645,3 +695,7 @@ class SessionManager:
         # This would be implemented to stream actual log files
         print(f"Streaming logs for session {session_id}...")
         print("(Log streaming not yet implemented)")
+
+
+# Create alias for compatibility
+SessionManager = FileSessionManager

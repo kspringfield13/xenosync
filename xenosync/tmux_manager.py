@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 
 from .exceptions import TmuxError
+from .terminal_manager import TerminalManager
 
 
 logger = logging.getLogger(__name__)
@@ -20,15 +21,14 @@ logger = logging.getLogger(__name__)
 class TmuxManager:
     """Manage tmux sessions for visual agent monitoring"""
     
-    def __init__(self, session_name: str = "xenosync_collective"):
+    def __init__(self, session_name: str = "xenosync-hive"):
         self.session = session_name
         self.pane_mapping: Dict[int, str] = {}
         self.window_mapping: Dict[str, int] = {
-            'orchestrator': 0,
-            'agents': 1,
-            'monitor': 2
+            'agents': 0  # Only agents window, no orchestrator or monitor
         }
         self._initialized = False
+        self.terminal_manager = TerminalManager()
     
     def is_tmux_available(self) -> bool:
         """Check if tmux is installed and available"""
@@ -59,25 +59,13 @@ class TmuxManager:
             time.sleep(0.5)
         
         try:
-            # Create new session with orchestrator window
+            # Create new session directly with agents window
             result = subprocess.run(
-                f"tmux new-session -d -s {self.session} -n orchestrator",
+                f"tmux new-session -d -s {self.session} -n agents",
                 shell=True, capture_output=True
             )
             if result.returncode != 0:
                 raise TmuxError(f"Failed to create tmux session: {result.stderr.decode()}")
-            
-            # Create agents window
-            subprocess.run(
-                f"tmux new-window -t {self.session}:1 -n agents",
-                shell=True, capture_output=True
-            )
-            
-            # Create monitor window
-            subprocess.run(
-                f"tmux new-window -t {self.session}:2 -n monitor",
-                shell=True, capture_output=True
-            )
             
             # Create agent panes in the agents window
             for i in range(1, num_agents):
@@ -219,28 +207,6 @@ class TmuxManager:
             except:
                 pass
     
-    def send_to_orchestrator(self, message: str):
-        """Send message to orchestrator window"""
-        target = f"{self.session}:orchestrator"
-        
-        # Clear and send message
-        subprocess.run(
-            f"tmux send-keys -t {target} C-c",  # Clear any existing input
-            shell=True, capture_output=True
-        )
-        time.sleep(0.1)
-        
-        subprocess.run(
-            f"tmux send-keys -t {target} 'clear' C-m",
-            shell=True, capture_output=True
-        )
-        
-        # Send the message
-        escaped_msg = message.replace("'", "'\"'\"'")
-        subprocess.run(
-            f"tmux send-keys -t {target} 'echo \"{escaped_msg}\"' C-m",
-            shell=True, capture_output=True
-        )
     
     def capture_pane(self, agent_id: int, lines: int = 50) -> str:
         """Capture recent output from agent pane"""
@@ -325,6 +291,45 @@ class TmuxManager:
         
         subprocess.run(f"tmux attach-session -t {self.session}", shell=True)
     
+    def open_monitoring_terminal(self, preferred_terminal: Optional[str] = None, 
+                                auto_open: bool = True) -> bool:
+        """Open a new terminal window to monitor the tmux session
+        
+        Args:
+            preferred_terminal: Preferred terminal application (auto-detect if None)
+            auto_open: Whether to actually open terminal (if False, just print instructions)
+            
+        Returns:
+            bool: True if terminal was opened successfully or instructions printed
+        """
+        if not self.session_exists():
+            logger.error(f"Tmux session {self.session} does not exist")
+            return False
+        
+        if not auto_open:
+            self.terminal_manager.print_manual_instructions(self.session)
+            return True
+        
+        logger.info(f"Opening monitoring terminal for session: {self.session}")
+        
+        # Try to open terminal automatically - no window selection needed
+        success = self.terminal_manager.open_tmux_session(
+            session_name=self.session,
+            preferred_terminal=preferred_terminal
+        )
+        
+        if success:
+            logger.info("Successfully opened monitoring terminal")
+        else:
+            logger.warning("Failed to open terminal automatically, showing manual instructions")
+            self.terminal_manager.print_manual_instructions(self.session)
+        
+        return True
+    
+    def get_terminal_info(self) -> Dict:
+        """Get information about terminal capabilities"""
+        return self.terminal_manager.get_terminal_info()
+    
     def switch_to_window(self, window: str):
         """Switch to specific window in tmux session"""
         window_id = self.window_mapping.get(window)
@@ -339,11 +344,47 @@ class TmuxManager:
     def kill_session(self):
         """Kill the tmux session"""
         if self.session_exists():
-            subprocess.run(
+            result = subprocess.run(
                 f"tmux kill-session -t {self.session}",
-                shell=True, capture_output=True
+                shell=True, capture_output=True, text=True
             )
-            logger.info(f"Killed tmux session '{self.session}'")
+            if result.returncode == 0:
+                logger.info(f"Successfully killed tmux session '{self.session}'")
+            else:
+                logger.warning(f"Failed to kill tmux session '{self.session}': {result.stderr}")
+        else:
+            logger.debug(f"Tmux session '{self.session}' does not exist, no need to kill")
+    
+    @staticmethod
+    def kill_xenosync_sessions():
+        """Kill all xenosync-related tmux sessions (safety net cleanup)"""
+        try:
+            # List all sessions and filter for xenosync sessions
+            result = subprocess.run(
+                "tmux list-sessions -F '#{session_name}' 2>/dev/null || true",
+                shell=True, capture_output=True, text=True
+            )
+            
+            if result.returncode == 0 and result.stdout:
+                sessions = result.stdout.strip().split('\n')
+                xenosync_sessions = [s for s in sessions if s.startswith('xenosync')]
+                
+                for session in xenosync_sessions:
+                    logger.info(f"Cleaning up xenosync session: {session}")
+                    subprocess.run(
+                        f"tmux kill-session -t {session}",
+                        shell=True, capture_output=True
+                    )
+                
+                if xenosync_sessions:
+                    logger.info(f"Cleaned up {len(xenosync_sessions)} xenosync tmux sessions")
+                else:
+                    logger.debug("No xenosync tmux sessions to clean up")
+            else:
+                logger.debug("No tmux sessions found or tmux not available")
+        
+        except Exception as e:
+            logger.warning(f"Failed to clean up xenosync tmux sessions: {e}")
     
     def get_session_info(self) -> Dict[str, Any]:
         """Get information about the tmux session"""

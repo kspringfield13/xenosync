@@ -4,6 +4,7 @@ Agent Manager - Manages multiple Claude instances for parallel execution
 
 import asyncio
 import logging
+import re
 import time
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
@@ -40,6 +41,7 @@ class Agent:
     completed_steps: List[int] = field(default_factory=list)
     start_time: datetime = field(default_factory=datetime.now)
     last_activity: datetime = field(default_factory=datetime.now)
+    last_message_sent: Optional[datetime] = None
     error: Optional[str] = None
     metrics: Dict[str, Any] = field(default_factory=dict)
     
@@ -56,6 +58,12 @@ class Agent:
     def update_activity(self):
         """Update last activity timestamp"""
         self.last_activity = datetime.now()
+    
+    def time_since_message(self) -> Optional[float]:
+        """Get seconds since last message was sent to this agent"""
+        if not self.last_message_sent:
+            return None
+        return (datetime.now() - self.last_message_sent).total_seconds()
 
 
 class AgentPool:
@@ -178,9 +186,14 @@ class AgentManager:
             # Set the interface to use tmux pane mode
             interface.set_tmux_pane_mode(self.tmux_manager.session, agent_id)
         
-        # Start Claude session
+        # Set environment variables for coordination
+        import os
+        os.environ['XENOSYNC_SESSION_ID'] = session_id
+        os.environ['XENOSYNC_AGENT_UID'] = uid
+        
+        # Start Claude session with coordination info
         try:
-            await interface.start(f"{session_id}_agent_{agent_id}")
+            await interface.start(f"{session_id}_agent_{agent_id}", agent_uid=uid)
             agent.status = AgentStatus.READY
             agent.update_activity()
             logger.info(f"Agent {agent_id} ({uid}) started successfully")
@@ -210,6 +223,7 @@ class AgentManager:
             await interface.send_message(tagged_message)
             
             agent.status = AgentStatus.WORKING
+            agent.last_message_sent = datetime.now()
             agent.update_activity()
             
             logger.info(f"Sent message to agent {agent_id} ({len(message)} chars)")
@@ -244,13 +258,85 @@ class AgentManager:
             logger.error(f"Failed to get output from agent {agent_id}: {e}")
             return None
     
+    async def check_agent_working(self, agent_id: int) -> bool:
+        """Check if agent is actively working based on Claude Code status indicators"""
+        agent = self.pool.get_agent_by_id(agent_id)
+        
+        # First check timing - if we recently sent a message, likely still working
+        if agent and agent.time_since_message():
+            time_since = agent.time_since_message()
+            grace_period = self.config.message_grace_period
+            if time_since < grace_period:  # Grace period - assume working during this time
+                logger.debug(f"Agent {agent_id} in grace period ({time_since:.1f}s since message, grace={grace_period}s)")
+                return True
+        
+        output = await self.get_agent_output(agent_id, lines=30)  # Increased from 10 to 30
+        if not output:
+            return False
+        
+        # Log output for debugging (first and last few lines)
+        output_lines = output.strip().split('\n')
+        if len(output_lines) > 5:
+            sample_output = f"First: '{output_lines[0]}' ... Last: '{output_lines[-1]}'"
+        else:
+            sample_output = f"'{output.strip()[:100]}...'"
+        logger.debug(f"Agent {agent_id} output sample: {sample_output}")
+        
+        # Claude Code displays working status as random verbs ending in "ing..."
+        # Examples: "Cooking...", "Booping...", "Considering...", "Transmuting..."
+        # Often followed by timing info: "Cooking... (121s • 4.4k tokens • esc to interrupt)"
+        
+        # Pattern to match working indicators - broader pattern for any word ending in ing...
+        working_pattern = re.compile(
+            r'\b\w+ing\.\.\..*?(?:\([^)]*\))?\s*(?:esc to interrupt)?\s*$', 
+            re.MULTILINE | re.IGNORECASE
+        )
+        
+        # Also match the simple pattern without extra info
+        simple_working_pattern = re.compile(r'\b\w+ing\.\.\.\s*$', re.MULTILINE | re.IGNORECASE)
+        
+        # Additional pattern for processing-type statuses that Claude Code might use
+        processing_pattern = re.compile(r'\b(?:processing|analyzing|generating|building)\b.*\.\.\.', re.IGNORECASE)
+        
+        # Check for working patterns
+        is_working = bool(
+            working_pattern.search(output) or 
+            simple_working_pattern.search(output) or 
+            processing_pattern.search(output)
+        )
+        
+        if is_working:
+            if agent:
+                # Extract the actual working status for logging
+                match = (working_pattern.search(output) or 
+                        simple_working_pattern.search(output) or 
+                        processing_pattern.search(output))
+                if match:
+                    status_text = match.group().strip()
+                    logger.debug(f"Agent {agent_id} is working: '{status_text}'")
+                
+                # Update agent status if not already working
+                if agent.status != AgentStatus.WORKING:
+                    agent.status = AgentStatus.WORKING
+                    agent.update_activity()
+                    logger.info(f"Agent {agent_id} detected as working: {status_text}")
+        else:
+            # Log when no working pattern is found (for debugging)
+            logger.debug(f"Agent {agent_id} no working pattern found in output")
+        
+        return is_working
+    
     async def check_agent_ready(self, agent_id: int) -> bool:
-        """Check if agent is ready for input"""
+        """Check if agent is ready for input (only if not actively working)"""
+        # First check if agent is actively working
+        if await self.check_agent_working(agent_id):
+            return False  # Agent is working, not ready for new input
+        
         output = await self.get_agent_output(agent_id, lines=20)
         if not output:
             return False
         
-        # Check for Claude ready indicators
+        # Check for Claude ready indicators only if not working
         ready_indicators = [
             "ready",
             "completed",
@@ -262,16 +348,29 @@ class AgentManager:
         output_lower = output.lower()
         is_ready = any(indicator in output_lower for indicator in ready_indicators)
         
+        # Additional check: make sure there's no working indicator present
+        if is_ready:
+            # Double-check there's no working pattern
+            working_pattern = re.compile(r'\b\w+ing\.\.\.', re.IGNORECASE)
+            if working_pattern.search(output):
+                logger.debug(f"Agent {agent_id} shows ready indicators but still has working pattern")
+                return False
+        
         if is_ready:
             agent = self.pool.get_agent_by_id(agent_id)
             if agent and agent.status == AgentStatus.WORKING:
                 agent.status = AgentStatus.IDLE
                 agent.update_activity()
+                logger.info(f"Agent {agent_id} became idle")
         
         return is_ready
     
     async def detect_api_error(self, agent_id: int) -> bool:
         """Detect if an agent has encountered an API error"""
+        # First check if agent is actively working - if so, probably not an error
+        if await self.check_agent_working(agent_id):
+            return False
+        
         output = await self.get_agent_output(agent_id, lines=30)
         if not output:
             return False
@@ -355,7 +454,18 @@ class AgentManager:
             new_output = await self.get_agent_output(agent_id, lines=10)
             if new_output:
                 output_lower = new_output.lower()
-                # Look for signs of recovery
+                
+                # First check if agent is showing working status (best indicator)
+                is_working = await self.check_agent_working(agent_id)
+                if is_working:
+                    logger.info(f"Agent {agent_id} recovery successful - agent is actively working!")
+                    agent.recovery_attempts = 0
+                    agent.stuck_count = 0
+                    agent.status = AgentStatus.WORKING
+                    agent.update_activity()
+                    return True
+                
+                # Look for other signs of recovery
                 recovery_indicators = [
                     "continuing",
                     "proceeding", 
@@ -373,7 +483,7 @@ class AgentManager:
                 ])
                 
                 if has_recovery and no_new_errors:
-                    logger.info(f"Agent {agent_id} recovery successful!")
+                    logger.info(f"Agent {agent_id} recovery successful - showing recovery indicators")
                     agent.recovery_attempts = 0
                     agent.stuck_count = 0
                     agent.status = AgentStatus.WORKING
@@ -466,11 +576,19 @@ class AgentManager:
                                 logger.info(f"Successfully recovered agent {agent.id}")
                             continue  # Skip other checks while recovering
                     
-                    # Check for idle agents (only if not recovering from error)
+                    # Check agent working/idle status (only if not recovering from error)
                     if agent.status == AgentStatus.WORKING:
-                        if await self.check_agent_ready(agent.id):
-                            agent.status = AgentStatus.IDLE
-                            logger.info(f"Agent {agent.id} became idle")
+                        # Check if still working first
+                        if not await self.check_agent_working(agent.id):
+                            # Not actively working, check if ready/idle
+                            if await self.check_agent_ready(agent.id):
+                                # Status update happens in check_agent_ready() - no duplicate logging
+                                pass
+                    elif agent.status == AgentStatus.IDLE:
+                        # Check if idle agent has started working again
+                        if await self.check_agent_working(agent.id):
+                            agent.status = AgentStatus.WORKING
+                            logger.info(f"Agent {agent.id} started working again")
                 
                 # Log statistics periodically
                 if int(time.time()) % 60 == 0:  # Every minute
@@ -489,7 +607,7 @@ class AgentManager:
             except Exception as e:
                 logger.error(f"Error in agent monitoring: {e}")
             
-            await asyncio.sleep(10)  # Check every 10 seconds
+            await asyncio.sleep(self.config.agent_monitor_interval)  # Check at configured interval
     
     async def assign_step_to_agent(self, step_content: str, 
                                   agent_id: Optional[int] = None) -> Optional[int]:
@@ -573,7 +691,7 @@ class AgentManager:
             for agent in working_agents:
                 await self.check_agent_ready(agent.id)
             
-            await asyncio.sleep(5)
+            await asyncio.sleep(self.config.wait_check_interval)
     
     async def shutdown(self, force_exit=False):
         """Shutdown all agents gracefully

@@ -22,6 +22,7 @@ class ClaudeInterface:
         self.config = config
         self.process: Optional[asyncio.subprocess.Process] = None
         self.session_id: Optional[str] = None
+        self.agent_uid: Optional[str] = None
         self.output_buffer = []
         self.max_buffer_size = 10000
         
@@ -40,9 +41,14 @@ class ClaudeInterface:
         self.tmux_shared_session = session_name
         self.tmux_pane_id = pane_id
     
-    async def start(self, session_id: str):
+    async def start(self, session_id: str, agent_uid: Optional[str] = None):
         """Start Claude CLI session"""
         self.session_id = session_id
+        self.agent_uid = agent_uid
+        
+        # Set up coordination environment if multi-agent
+        if agent_uid:
+            await self._setup_coordination_environment()
         
         if self.tmux_pane_mode:
             # Use existing tmux pane in shared session
@@ -59,10 +65,67 @@ class ClaudeInterface:
         
         logger.info(f"Claude session started for {session_id}")
     
+    async def _setup_coordination_environment(self):
+        """Set up environment and files for agent coordination"""
+        try:
+            # Create session file for coordination
+            session_file = Path.cwd() / ".xenosync_session"
+            session_file.write_text(self.session_id)
+            
+            # Create coordination directory
+            coord_dir = Path.cwd() / ".xenosync_coordination"
+            coord_dir.mkdir(exist_ok=True)
+            
+            # Write agent info file
+            agent_info = {
+                "agent_uid": self.agent_uid,
+                "session_id": self.session_id,
+                "started_at": str(asyncio.get_event_loop().time())
+            }
+            
+            import json
+            agent_file = coord_dir / f"agent_{self.agent_uid}.json"
+            agent_file.write_text(json.dumps(agent_info))
+            
+            logger.debug(f"Set up coordination environment for {self.agent_uid}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to set up coordination environment: {e}")
+    
     async def _start_in_tmux_pane(self):
         """Start Claude in a specific tmux pane (multi-agent mode)"""
         # Target pane in shared session
         target_pane = f"{self.tmux_shared_session}:agents.{self.tmux_pane_id}"
+        
+        # Set environment variables for coordination in the tmux session itself
+        if self.agent_uid:
+            # Set environment variables at session level first
+            session_env_cmds = [
+                ['tmux', 'set-environment', '-t', self.tmux_shared_session, 
+                 'XENOSYNC_SESSION_ID', self.session_id],
+                ['tmux', 'set-environment', '-t', self.tmux_shared_session,
+                 'XENOSYNC_AGENT_UID', self.agent_uid]
+            ]
+            
+            for env_cmd in session_env_cmds:
+                await self._run_command(env_cmd)
+            
+            # Also export in the pane shell environment
+            pane_env_cmds = [
+                f"export XENOSYNC_SESSION_ID='{self.session_id}'",
+                f"export XENOSYNC_AGENT_UID='{self.agent_uid}'",
+                f"export XENOSYNC_PROJECT_ROOT='{Path(__file__).parent.parent}'",
+                "echo 'Coordination environment set up for agent'"
+            ]
+            
+            for env_cmd in pane_env_cmds:
+                await self._run_command([
+                    'tmux', 'send-keys', '-t', target_pane, 
+                    env_cmd, 'Enter'
+                ])
+            
+            # Small delay to ensure environment is set
+            await asyncio.sleep(1)
         
         # Start Claude in the pane
         claude_cmd = ' '.join(self.config.claude_command)

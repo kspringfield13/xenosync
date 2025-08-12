@@ -1,30 +1,21 @@
 # Xenosync
-### Synchronization Platform for Multi-Agent AI Orchestration
+### Multi-Agent AI Orchestration Platform
 
-<p align="center">
-  <img src="assets/xenosync-hero.png" alt="Xenosync Banner" width="100%">
-</p>
-
-[![Version](https://img.shields.io/badge/version-1.0.0-maroon.svg)](https://github.com/xenosync/xenosync)
+[![Version](https://img.shields.io/badge/version-2.0.0-maroon.svg)](https://github.com/xenosync/xenosync)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
 ## What is Xenosync?
 
-Xenosync is an otherworldly orchestration platform that synchronizes multiple AI agents to work in perfect harmony, like an alien hive mind building software.
+Xenosync orchestrates multiple Claude Code AI agents to work together on complex software development tasks. Run 2-20 agents in parallel or collaborative mode to build applications, refactor code, and solve engineering challenges faster.
 
-## Features
+## Prerequisites
 
-- **👽 Alien Hive Mind**: Coordinate up to 20 AI agents simultaneously
-- **🌌 Multiple Sync Modes**: Sequential, Parallel, Collaborative, Distributed, and Hybrid execution
-- **🔮 Visual Monitoring**: Tmux-based visualization with real-time agent status
-- **🧬 Smart Coordination**: SQLite-backed work claims and conflict resolution
-- **⚡ Dependency Analysis**: Intelligent task distribution based on dependencies
-- **🎭 Strategy Patterns**: Flexible execution strategies for different project types
+- Python 3.8+
+- [Claude CLI](https://claude.ai/code) installed and configured
+- Tmux (for visual monitoring)
 
-## Quick Start
-
-### Installation
+## Installation
 
 ```bash
 # Clone the repository
@@ -34,249 +25,186 @@ cd xenosync
 # Install Xenosync
 pip install -e .
 
-# Initialize Xenosync
+# Initialize configuration
 xenosync init
 ```
 
-### Basic Usage
+## Quick Start
 
 ```bash
-# Single agent (traditional mode)
-xenosync start my_prompt.yaml
+# Start with interactive prompt selection (minimum 2 agents)
+xenosync start --agents 4
 
-# Multi-agent parallel execution
-xenosync start my_prompt.yaml --agents 4 --mode parallel
+# Run a specific prompt file
+xenosync start my_prompt.yaml --agents 3
 
-# Collaborative hive mind mode
-xenosync start my_prompt.yaml --agents 3 --mode collaborative
-
-# Smart distributed execution
-xenosync start my_prompt.yaml --agents 5 --mode distributed
+# Use collaborative mode for interdependent tasks
+xenosync start prompt.yaml --agents 4 --mode collaborative
 ```
-
-### Demo Prompts
-
-Try these ready-to-run demo prompts to see Xenosync in action:
-
-```bash
-# Build a retro multiplayer Snake game (25 mins)
-xenosync start prompts/demos/retro-game.yaml --agents 4 --mode parallel
-
-# Generate documentation for any codebase (30 mins)
-xenosync start prompts/demos/code-documenter.yaml --agents 5 --mode distributed
-
-# Create a personal productivity dashboard (20 mins)
-xenosync start prompts/demos/personal-dashboard.yaml --agents 4 --mode parallel
-
-# Build chatbots with unique personalities (25 mins)
-xenosync start prompts/demos/chatbot-personality.yaml --agents 3 --mode collaborative
-```
-
-Each demo showcases different multi-agent capabilities and produces immediately usable results!
 
 ## Execution Modes
 
-### Sequential Mode
-Traditional single-agent execution for critical, order-dependent tasks.
+### Parallel Mode (Default)
+Tasks are pre-distributed among agents. Each agent works independently on their assigned tasks.
 
-### Parallel Mode  
-Multiple agents working independently on separate tasks.
+**Use when**: Tasks are independent, building separate components, parallel development
 
-### Collaborative Mode
-Agents self-organize around all tasks, choosing work based on availability and capabilities.
+```bash
+xenosync start prompt.yaml --agents 4 --mode parallel
+```
 
-### Distributed Mode
-Intelligent distribution based on task dependencies and agent workload.
+### Collaborative Mode  
+Agents dynamically claim tasks from a shared pool and can build on each other's work.
 
-### Hybrid Mode
-Dynamically switches between modes based on project phase.
+**Use when**: Tasks are interdependent, need coordination, complex systems
+
+```bash
+xenosync start prompt.yaml --agents 3 --mode collaborative
+```
+
+## Demo Example - Retro Game Build
+
+Experience xenosync's power by building a complete Pac-Man style arcade game. This demo serves as our primary performance benchmark:
+
+```bash
+# Parallel mode - Agents divide game components (graphics, AI, controls, sound)
+xenosync start prompts/demos/retro-game.yaml --agents 4 --mode parallel
+
+# Collaborative mode - Agents coordinate on interdependent game systems
+xenosync start prompts/demos/retro-game.yaml --agents 4 --mode collaborative
+```
+
+This builds a fully playable retro arcade game with:
+- 8-bit pixel art graphics and animations
+- Ghost AI with different personality patterns
+- Power-ups and scoring system
+- Retro sound effects and music
+- Responsive controls and collision detection
+
+Watch as multiple agents collaborate to create a complex, interactive game in minutes!
 
 ## Commands Reference
 
-<details>
-<summary><b>Click to expand full command reference</b></summary>
-
-### Core Commands
+### Starting Sessions
 ```bash
-# Initialize Xenosync
-xenosync init
-xsync init                       # Short alias
-
-# Start a sync session
-xenosync start                   # Interactive prompt selection
-xenosync start my_prompt.yaml    # Use specific prompt
-xsync start --agents 4 --mode parallel  # Multi-agent mode
-
-# Execution modes
-xenosync start prompt.yaml --mode sequential   # Single agent (default)
-xenosync start prompt.yaml --agents 4 --mode parallel      # Independent tasks
-xenosync start prompt.yaml --agents 3 --mode collaborative # Self-organizing
-xenosync start prompt.yaml --agents 5 --mode distributed   # Dependency-aware
-xenosync start prompt.yaml --agents 3 --mode hybrid        # Mixed phases
+xenosync start                          # Interactive prompt selection
+xenosync start prompt.yaml --agents 4   # Run specific prompt
+xenosync start --resume <session-id>    # Resume previous session
 ```
 
-### Monitoring & Management
+### Managing Sessions
 ```bash
-# Session management
-xenosync status                  # Check current status
-xenosync attach <session-id>     # Attach to running session
-xenosync list                    # List all sessions
-xenosync kill <session-id>       # Kill a running session
-xenosync monitor --multi-agent   # Web dashboard
-
-# Prompt management
-xenosync prompt list             # List available prompts
-xenosync prompt validate <file>  # Validate a prompt file
-xenosync prompt convert <in> <out> # Convert between formats
+xenosync status                         # Show active sessions
+xenosync list                           # List all sessions
+xenosync attach --hive                  # Attach to tmux session
+xenosync kill <session-id>              # Terminate a session
 ```
 
-### Example Workflows
+### Working with Prompts
 ```bash
-# Simple Web App (Parallel)
-xsync start webapp.yaml --agents 4 --mode parallel
-
-# Complex System (Collaborative)
-xsync start enterprise.yaml --agents 6 --mode collaborative
-
-# Dependency-Heavy Project (Distributed)
-xsync start microservices.yaml --agents 8 --mode distributed
-
-# Critical Path (Sequential)
-xsync start critical.yaml --mode sequential
+xenosync prompt list                    # List available prompts
+xenosync prompt validate file.yaml      # Validate prompt syntax
 ```
 
-</details>
+## Creating Prompts
+
+Create YAML files defining your tasks:
+
+```yaml
+name: "Build Feature X"
+description: "Create a new feature with tests"
+initial_prompt: |
+  You are part of a development team building Feature X.
+  Work together to create high-quality, tested code.
+
+steps:
+  - number: 1
+    content: "Set up the project structure and dependencies"
+    
+  - number: 2
+    content: "Implement the core feature logic"
+    
+  - number: 3
+    content: "Add comprehensive tests"
+    
+  - number: 4
+    content: "Create documentation"
+```
 
 ## Configuration
 
-Xenosync configuration is stored in `~/.xenosync/config.yaml`:
+Configuration lives in `~/.xenosync/config.yaml`:
 
 ```yaml
-multi_agent:
-  enabled: true
-  default_agents: 3
-  default_mode: collaborative
-  
-execution_modes:
-  parallel: {enabled: true, min_agents: 2, max_agents: 10}
-  collaborative: {enabled: true, min_agents: 2, max_agents: 10}
-  distributed: {enabled: true, min_agents: 2, max_agents: 20}
-```
-
-<details>
-<summary><b>Advanced Configuration Options</b></summary>
-
-### Full Configuration Structure
-```yaml
-# General settings
-default_profile: normal
-use_tmux: true
-auto_continue: true
+# Core settings
 log_level: INFO
-
-# Paths
-prompts_dir: prompts
 sessions_dir: xsync-sessions
-templates_dir: templates
-
-# Session settings
-session_name_prefix: build
-max_retries: 3
-retry_delay: 60
+prompts_dir: prompts
 
 # Claude settings
 claude_command: claude
 claude_args: ['--dangerously-skip-permissions']
-initial_wait: 3
 
-# TODO detection settings
-wait_for_todo: true
-todo_wait_timeout: 90
-todo_patterns: [todos, todo, task, steps, plan, ready]
+# Multi-agent defaults
+num_agents: 2                # Minimum 2 agents required
+execution_mode: parallel     # parallel or collaborative
 
-# Database
-database_path: xenosync.db
-
-# Monitoring
-enable_web_monitor: true
-monitor_port: 8080
-monitor_host: localhost
-
-# Notifications
-enable_notifications: false
-notification_webhook: null
+# Timing (optimized for Claude Code)
+agent_monitor_interval: 30   # Check agents every 30 seconds
+message_grace_period: 60     # Wait after sending work
 ```
 
-### Sync Profiles
-- **Fast**: 5-minute intervals, 4-minute minimum duration
-- **Normal**: 10-minute intervals, 8-minute minimum duration  
-- **Careful**: 20-minute intervals, 15-minute minimum duration
+## Visual Monitoring
 
-</details>
+Xenosync automatically opens a tmux session showing all agents:
 
-## 🏗️ Architecture
+- **Orchestrator window**: Main control and logging
+- **Agent panes**: Individual agent outputs
+- **Color coding**: Green (working), Yellow (idle), Red (error)
 
-<details>
-<summary><b>Technical Architecture & Components</b></summary>
-
-### Core Components
-
-- **CLI** (`xenosync/cli.py`) - Main command-line interface using Click
-- **Config** (`xenosync/config.py`) - Configuration management with sync profiles
-- **XenosyncOrchestrator** (`xenosync/orchestrator.py`) - Async orchestration engine
-- **SessionManager** (`xenosync/session_manager.py`) - SQLite-based session tracking
-- **AgentManager** (`xenosync/agent_manager.py`) - Multi-agent pool management
-- **CoordinationManager** (`xenosync/coordination.py`) - Work claims and conflict resolution
-- **ExecutionStrategies** (`xenosync/execution_strategies.py`) - Different sync modes
-- **TmuxManager** (`xenosync/tmux_manager.py`) - Visual agent monitoring
-- **ClaudeInterface** (`xenosync/claude_interface.py`) - Interface to Claude CLI
-
-### Key Patterns
-
-1. **Async Architecture**: Python's asyncio for concurrent operations
-2. **SQLite Storage**: Sessions and coordination in `~/.xenosync/xenosync.db`
-3. **YAML Prompts**: Structured format with metadata, steps, and strategies
-4. **Sync Profiles**: Fast (5s wait), Normal (30s wait), Careful (60s wait)
-5. **Tmux Integration**: Visual monitoring of agent collective
-6. **Work Claims**: Prevents conflicts between agents
-7. **Inter-Agent Messaging**: Hive mind communication
-
-### Multi-Agent Coordination
-
-#### Agent Pool Management
-- Dynamic agent creation and monitoring
-- Health checks and automatic recovery
-- Load balancing and work distribution
-- Performance metrics per agent
-
-#### Coordination System
-- SQLite-backed work claims
-- File-level conflict detection
-- Automatic stale claim cleanup (2-hour expiry)
-- Inter-agent messaging
-- Completed work logging
-
-#### Visual Monitoring
-- Tmux windows: Orchestrator, Agents, Monitor
-- Real-time agent status updates
-- Pane highlighting (active/idle/error)
-- Hive status display
-
-</details>
-
-## 💻 Development
-
-<details>
-<summary><b>Development Setup & Commands</b></summary>
-
-### Installation for Development
+Attach to running session:
 ```bash
-# Install with development dependencies
+xenosync attach --hive
+# or directly with tmux
+tmux attach -t xenosync-hive
+```
+
+## Troubleshooting
+
+### "Minimum 2 agents required"
+Xenosync is a multi-agent platform. Always specify at least 2 agents:
+```bash
+xenosync start prompt.yaml --agents 2  # Minimum
+```
+
+### Tmux session persists after Ctrl+C
+Clean up manually if needed:
+```bash
+xenosync kill all
+# or
+tmux kill-session -t xenosync-hive
+```
+
+### Agents marked idle too quickly
+This is normal - agents alternate between working and idle states. The system has 60-second grace periods to avoid premature idle detection.
+
+### File coordination conflicts
+The file-based coordination system prevents conflicts automatically. If you see conflict warnings, they typically self-resolve within seconds.
+
+## Tips for Best Results
+
+1. **Start with 3-4 agents** - Good balance of parallelism and coordination
+2. **Use parallel mode** for independent tasks like building separate features
+3. **Use collaborative mode** for complex, interconnected work
+4. **Break large tasks into smaller steps** in your YAML prompts
+5. **Let agents run** - They work best with minimal intervention
+
+## Development
+
+```bash
+# Install development dependencies
 pip install -e ".[dev]"
-```
 
-### Development Commands
-```bash
 # Run tests
 pytest
 
@@ -285,96 +213,26 @@ black xenosync/
 
 # Type checking
 mypy xenosync/
-
-# Linting
-flake8 xenosync/
 ```
 
-### Project Structure
-```
-xenosync/
-├── prompts/              # Prompt templates
-│   ├── examples/        # Example prompts
-│   └── projects/        # Project-specific prompts
-├── xenosync/            # Main package
-│   ├── cli.py          # CLI interface
-│   ├── config.py       # Configuration
-│   ├── orchestrator.py # Core orchestration
-│   ├── agent_manager.py # Agent management
-│   ├── coordination.py # Work coordination
-│   └── ...
-└── tests/              # Test suite
-```
+## Architecture Highlights
 
-</details>
+- **File-based coordination**: No database needed, uses JSON files for state
+- **Conflict-free design**: Automatic work claim system prevents overlaps
+- **Resilient agents**: Automatic recovery from API errors
+- **Visual feedback**: Real-time tmux monitoring of all agents
 
-## 🔧 Advanced Features
+## Contributing
 
-<details>
-<summary><b>Advanced Features & Implementation Notes</b></summary>
+We welcome contributions! Focus areas:
+- Execution strategy improvements
+- Agent coordination enhancements
+- Prompt templates for common tasks
 
-### Work Claims System
-Prevents conflicts between agents working on the same files:
-- Agents claim files before editing
-- Claims auto-expire after 2 hours
-- Conflict detection before work starts
-- Automatic cleanup of stale claims
-
-### Inter-Agent Messaging
-- Broadcast messages to all agents
-- Point-to-point messaging between specific agents
-- Message types: work_claim, work_release, status_update, help_request
-
-### Performance Analytics
-- Track agent performance metrics
-- Optimize task distribution
-- Identify bottlenecks
-- Generate performance reports
-
-### Automatic Recovery
-- Failed agents are detected automatically
-- Work is redistributed to healthy agents
-- Session state is preserved
-- Resumable from interruption points
-
-### Important Implementation Notes
-- Always run from the project root directory
-- The `--dangerously-skip-permissions` flag is used to avoid interactive prompts
-- Session data persists in SQLite database
-- Maximum 20 agents per session (hive size limit)
-- Both session and coordination data support resuming interrupted sessions
-
-</details>
-
-## 👽 Alien Terminology
-
-<details>
-<summary><b>Xenosync Glossary</b></summary>
-
-The platform uses alien-themed terminology:
-- **Hive**: Collection of agents
-- **Collective**: All agents working together
-- **Sync**: Build/execution process
-- **Transmission**: Messages between components
-- **Cycle**: Time units in alien coordinate system
-- **Harmonization**: Agent coordination
-- **Synthesis**: Task completion
-
-</details>
-
-## 🤝 Contributing
-
-We welcome contributions from across the galaxy!
-
-## 📜 License
+## License
 
 MIT License - see [LICENSE](LICENSE) file.
 
-## 🙏 Acknowledgments
-
-- Built on Claude Code AI technology
-- Inspired by alien hive mind coordination
-
 ---
 
-**Xenosync** - *Where alien intelligence meets perfect synchronization* 👽🚀
+**Xenosync** - Orchestrate AI agents to build software faster

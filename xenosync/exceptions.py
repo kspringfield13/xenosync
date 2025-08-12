@@ -48,6 +48,11 @@ class TmuxError(XenosyncError):
     pass
 
 
+class TerminalError(XenosyncError):
+    """Error related to terminal operations - display interface failure"""
+    pass
+
+
 class CoordinationError(XenosyncError):
     """Error related to agent coordination - hive mind disruption"""
     pass

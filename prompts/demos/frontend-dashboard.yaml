@@ -8,92 +8,88 @@ initial_prompt: |
 
   ### Before Starting ANY Work:
 
-  **Important**: You are part of a coordinated multi-agent system using SQLite-based coordination. The system automatically manages work claims, conflict resolution, and inter-agent communication through the CoordinationManager.
+  **Important**: You are part of a coordinated multi-agent system. Use the `xenosync-coord` CLI tool to interact with the coordination system and avoid conflicts with other agents.
 
-  1. **Agent Registration Process:**
-     - Your agent is automatically registered with a unique UID and numeric ID
-     - Agent status is tracked in the `agent_registry` table
-     - Your capabilities and metrics are recorded for coordination
-     - No manual registration is required
+  ### Essential Commands You Must Use:
 
-  2. **Work Claiming System:**
-     - Use the CoordinationManager to claim work on specific files
-     - Claims are stored in SQLite `work_claims` table, not JSON files
-     - The system automatically detects conflicts and prevents overlapping work
-     - Stale claims are auto-released after 2 hours (not 1 hour)
-
-  3. **Coordination Database Structure:**
-     ```
-     SQLite Database (xenosync.db):
-     ├── work_claims          # Active work claims with file locks
-     ├── agent_registry       # Agent status and capabilities  
-     ├── agent_messages       # Inter-agent communication
-     ├── completed_work       # Log of completed tasks
-     └── sessions            # Session metadata
-     ```
-
-  ### Work Coordination Workflow:
-
-  #### Step 1: Check for Available Work
-  1. The system automatically queries active claims to prevent conflicts
-  2. Available work is distributed based on agent capabilities and current workload
-  3. Conflicts are resolved automatically - no manual checking required
-
-  #### Step 2: Claim Work Through CoordinationManager
-  ```python
-  # System automatically handles this - agents don't need to manually implement
-  claim_id = coordination_manager.claim_work(
-      agent_uid=your_agent_uid,
-      session_id=current_session_id, 
-      files=["list", "of", "files", "to", "modify"],
-      description="Description of work being performed",
-      metadata={"estimated_duration": "minutes", "priority": "high"}
-  )
+  #### 1. Check Coordination Status (Always do this first!)
+  ```bash
+  # See what other agents are doing and current session status
+  scripts/xenosync-coord status
   ```
 
-  #### Step 3: Work Status Management
-  - **Status Values**: Use WorkStatus enum values:
-    - `CLAIMED`: Work has been claimed but not started
-    - `IN_PROGRESS`: Actively working on the claim
-    - `COMPLETED`: Work finished successfully
-    - `FAILED`: Work encountered errors
-    - `RELEASED`: Work was abandoned or reassigned
+  #### 2. Claim Work Before Starting
+  ```bash
+  # Claim specific files before modifying them
+  scripts/xenosync-coord claim "file1.html,file2.js,css/styles.css" "Implementing game UI and player controls"
 
-  #### Step 4: Update Work Progress
-  - Update your work status automatically through the system
-  - Status updates are tracked with timestamps
-  - Other agents are notified of progress through the messaging system
+  # With priority and time estimate
+  scripts/xenosync-coord claim "game.js" "Building ghost AI system" --priority high --estimated-duration 30
+  ```
 
-  #### Step 5: Inter-Agent Communication
-  - Send messages to coordinate with other agents:
-    - Broadcast messages to all agents
-    - Direct messages to specific agents
-    - Message types: work_claim, work_release, status_update, help_request
-  - Messages are stored in `agent_messages` table
+  #### 3. Check Completed Work (Avoid duplication!)
+  ```bash
+  # See what has already been completed
+  scripts/xenosync-coord list-work
+  ```
 
-  #### Step 6: Complete Work
-  1. Update work status to `COMPLETED` or `FAILED`
-  2. System logs completion in `completed_work` table with:
-     - Files modified
-     - Duration
-     - Success status
-     - Any error messages
-  3. Work claims are automatically released
+  #### 4. Report Completion (Required!)
+  ```bash
+  # When you finish work - MUST reference step numbers!
+  scripts/xenosync-coord complete "Completed step 1: Game framework and architecture ready" --files "index.html,game.js,styles.css" --duration 1200
 
-  ### Conflict Resolution:
-  - **Automatic Detection**: System detects file conflicts before allowing work claims
-  - **Stale Claim Cleanup**: Claims older than 2 hours are automatically released
-  - **Load Balancing**: Work is distributed based on current agent workloads
-  - **Priority System**: High-priority work can preempt lower-priority tasks
+  # If work failed
+  scripts/xenosync-coord complete "Failed step 3: Player movement system" --failed --error "Collision detection issues"
+  ```
 
-  ### Key Coordination Principles:
-  1. **Trust the System**: The CoordinationManager handles most coordination automatically
-  2. **Communicate Actively**: Use the messaging system to coordinate complex work
-  3. **Update Status Frequently**: Keep your work status current for effective coordination
-  4. **Respect Claims**: Never work on files claimed by other agents
-  5. **Handle Failures Gracefully**: Update status to FAILED and release claims when encountering issues
+  #### 5. Communicate with Team
+  ```bash
+  # Send messages to coordinate with other agents
+  scripts/xenosync-coord send-message all status_update "Starting work on maze generation system"
 
-  **Remember: We are working as a coordinated hive mind through the SQLite-based coordination system. The database handles conflict resolution, work distribution, and communication automatically. Stay organized, trust the system, and focus on your assigned work while the coordination layer manages the complex multi-agent orchestration.**
+  # Get messages from other agents
+  scripts/xenosync-coord get-messages
+  ```
+
+  ### CRITICAL Work Flow:
+
+  1. **Start Each Work Session:**
+     ```bash
+     # Check what's happening
+     scripts/xenosync-coord status
+     scripts/xenosync-coord list-work
+     
+     # Claim your work area  
+     scripts/xenosync-coord claim "files,to,modify" "Description with step number"
+     ```
+
+  2. **During Work:**
+     - Focus on your claimed files only
+     - Never modify files claimed by other agents
+     - Check messages periodically: `scripts/xenosync-coord get-messages`
+
+  3. **Complete Work:**
+     ```bash
+     # MUST mention step numbers in completion message!
+     scripts/xenosync-coord complete "Completed step X: [Description]" --files "modified,files" --duration seconds
+     ```
+
+  ### Coordination Rules:
+  - **Always claim before coding** - prevents conflicts
+  - **Reference step numbers** in completion messages (e.g., "Completed step 3: Maze generation")
+  - **Check status frequently** - see what others are doing
+  - **Communicate blockers** - ask for help when stuck
+  - **Focus on integration** - ensure components work together
+
+  ### Step-Based Progress Tracking:
+  **IMPORTANT**: When completing work, explicitly mention which step(s) you completed:
+  - ✅ "Completed step 1: Game framework architecture"
+  - ✅ "Finished step 5: Ghost AI implementation" 
+  - ✅ "Done with step 8: Audio system integration"
+  - ❌ "Fixed some bugs" (too vague)
+  - ❌ "Updated files" (no step reference)
+
+  **Remember: We are a coordinated hive mind. Use the coordination tools, respect claims, communicate clearly, and reference step numbers when completing work. The orchestrator tracks progress by matching your completion messages to specific steps.**
   
   Dashboard Features:
   - Modular widget-based architecture

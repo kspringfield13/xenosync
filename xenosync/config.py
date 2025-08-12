@@ -1,59 +1,18 @@
 """
-Configuration management for Xenosync """
+Configuration management for Xenosync - Simplified single-profile system
+"""
 
 import os
 import yaml
 from pathlib import Path
-from dataclasses import dataclass, asdict
 from typing import Dict, Any, Optional
 
 
-@dataclass
-class SyncProfile:
-    """Build speed profile configuration"""
-    name: str
-    step_interval: int  # seconds between steps
-    min_step_duration: int  # minimum seconds per step
-    idle_check_interval: int  # seconds between idle checks
-    idle_threshold: int  # seconds before considered idle
-    idle_check_delay: int  # initial delay before checking
-
-
-# Predefined profiles
-PROFILES = {
-    'fast': SyncProfile(
-        name='fast',
-        step_interval=300,  # 5 minutes
-        min_step_duration=240,  # 4 minutes
-        idle_check_interval=20,
-        idle_threshold=40,
-        idle_check_delay=30
-    ),
-    'normal': SyncProfile(
-        name='normal',
-        step_interval=600,  # 10 minutes
-        min_step_duration=480,  # 8 minutes
-        idle_check_interval=20,
-        idle_threshold=40,
-        idle_check_delay=60
-    ),
-    'careful': SyncProfile(
-        name='careful',
-        step_interval=1200,  # 20 minutes
-        min_step_duration=900,  # 15 minutes
-        idle_check_interval=30,
-        idle_threshold=60,
-        idle_check_delay=120
-    )
-}
-
-
 class Config:
-    """Xenosync configuration manager"""
+    """Xenosync configuration manager - streamlined for simplicity"""
     
     def __init__(self, config_dict: Optional[Dict[str, Any]] = None):
         self._config = config_dict or self._default_config()
-        self._profile = PROFILES[self._config.get('default_profile', 'normal')]
     
     @classmethod
     def load(cls, config_path: Path) -> 'Config':
@@ -81,71 +40,33 @@ class Config:
         config.save(config_path)
     
     def _default_config(self) -> Dict[str, Any]:
-        """Get default configuration"""
+        """Get default configuration - only essential settings"""
         return {
-            # General settings
-            'default_profile': 'normal',
-            'use_tmux': True,
-            'auto_continue': True,
+            # Core settings
             'log_level': 'INFO',
-            
-            # Paths
-            'prompts_dir': 'prompts',
             'sessions_dir': 'xsync-sessions',
-            'templates_dir': 'templates',
-            
-            # Session settings
-            'session_name_prefix': 'build',
-            'max_retries': 3,
-            'retry_delay': 60,
+            'prompts_dir': 'prompts',
             
             # Claude settings
             'claude_command': 'claude',
             'claude_args': ['--dangerously-skip-permissions'],
-            'initial_wait': 3,  # seconds to wait after starting Claude
+            'initial_wait': 5,  # Seconds to wait after starting Claude
             
-            # TODO detection settings
-            'wait_for_todo': True,  # Whether to wait for TODO list
-            'todo_wait_timeout': 90,  # Maximum seconds to wait for TODO
-            'todo_patterns': [  # Patterns to detect TODO lists
-                'todos', 'todo', 'task', 'steps', 'plan', 'ready',
-                'update todos', 'todo list', 'task list', 'action items',
-                'next steps', 'implementation plan', 'sync steps'
-            ],
-            'todo_capture_lines': 150,  # Lines to capture when checking for TODO
+            # Multi-agent settings
+            'num_agents': 2,  # Default number of agents (minimum 2)
+            'execution_mode': 'parallel',  # parallel or collaborative
+            'agent_launch_delay': 3,  # Seconds between agent launches
             
-            # Database
-            'database_path': 'xenosync.db',
+            # Tmux settings
+            'use_tmux': True,
+            'auto_open_terminal': True,
+            'preferred_terminal': None,  # Auto-detect if None
             
-            # Monitoring
-            'enable_web_monitor': True,
-            'monitor_port': 8080,
-            'monitor_host': 'localhost',
-            
-            # Notifications
-            'enable_notifications': False,
-            'notification_webhook': None,
-            
-            # Advanced
-            'capture_screenshots': False,
-            'archive_completed': True,
-            'compression': 'gzip',
-            'max_log_size_mb': 100,
-            'debug_output': False  # Enable debug output capture
+            # Timing settings (optimized for Claude Code)
+            'agent_monitor_interval': 30,  # Check agents every 30 seconds
+            'message_grace_period': 60,  # Wait 60 seconds after sending message
+            'wait_check_interval': 5,  # Check interval when waiting for agents
         }
-    
-    def apply_profile(self, profile_name: str):
-        """Apply a build profile"""
-        if profile_name in PROFILES:
-            self._profile = PROFILES[profile_name]
-            self._config['current_profile'] = profile_name
-        else:
-            raise ValueError(f"Unknown profile: {profile_name}")
-    
-    @property
-    def profile(self) -> SyncProfile:
-        """Get current build profile"""
-        return self._profile
     
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value"""
@@ -166,19 +87,9 @@ class Config:
         return Path(self._config['sessions_dir'])
     
     @property
-    def database_path(self) -> Path:
-        """Get database path"""
-        return Path(self._config['database_path'])
-    
-    @property
     def use_tmux(self) -> bool:
         """Whether to use tmux"""
         return self._config.get('use_tmux', True)
-    
-    @property
-    def auto_continue(self) -> bool:
-        """Whether to auto-continue on idle"""
-        return self._config.get('auto_continue', True)
     
     @property
     def log_level(self) -> str:
@@ -192,9 +103,21 @@ class Config:
         cmd.extend(self._config.get('claude_args', []))
         return cmd
     
+    @property
+    def agent_monitor_interval(self) -> int:
+        """Get agent monitoring interval in seconds"""
+        return self._config.get('agent_monitor_interval', 30)
+    
+    @property
+    def message_grace_period(self) -> int:
+        """Get grace period after sending message in seconds"""
+        return self._config.get('message_grace_period', 60)
+    
+    @property
+    def wait_check_interval(self) -> int:
+        """Get check interval when waiting for agents"""
+        return self._config.get('wait_check_interval', 5)
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
-        return {
-            **self._config,
-            'current_profile': asdict(self._profile)
-        }
+        return self._config.copy()

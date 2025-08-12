@@ -40,8 +40,8 @@ class SyncPrompt:
     
     def estimated_time(self, config: Config) -> str:
         """Estimate total build time"""
-        profile = config.profile
-        total_minutes = len(self.steps) * (profile.step_interval / 60)
+        # Use a reasonable estimate of 5 minutes per step
+        total_minutes = len(self.steps) * 5
         
         hours = int(total_minutes // 60)
         minutes = int(total_minutes % 60)
