@@ -43,6 +43,10 @@ class Agent:
     current_task_start_time: Optional[datetime] = None
     current_task_number: Optional[int] = None
     last_completion_check: Optional[datetime] = None
+    # Git worktree fields
+    worktree_path: Optional[str] = None
+    worktree_branch: Optional[str] = None
+    current_task_branch: Optional[str] = None
     
     @property
     def is_available(self) -> bool:
@@ -156,9 +160,28 @@ class AgentManager:
             session_id=session_id
         )
         
+        # Create worktree for this agent if using git coordination
+        if self.coordination and hasattr(self.coordination, 'create_agent_worktree'):
+            try:
+                from pathlib import Path
+                worktree_path, branch_name = self.coordination.create_agent_worktree(
+                    agent_id, uid, session_id
+                )
+                agent.worktree_path = str(worktree_path)
+                agent.worktree_branch = branch_name
+                logger.info(f"Created worktree for agent {agent_id} at {worktree_path}")
+            except Exception as e:
+                logger.error(f"Failed to create worktree for agent {agent_id}: {e}")
+                # Continue without worktree for backward compatibility
+        
         # Create Claude interface
         interface = ClaudeInterface(self.config)
         self.interfaces[agent_id] = interface
+        
+        # Set working directory if worktree exists
+        if agent.worktree_path:
+            interface.working_directory = agent.worktree_path
+            logger.info(f"Agent {agent_id} will work in {agent.worktree_path}")
         
         # If tmux manager is available, tell the interface to use a specific pane
         if self.tmux_manager:
@@ -167,6 +190,9 @@ class AgentManager:
         # Set environment variables for coordination
         os.environ['XENOSYNC_SESSION_ID'] = session_id
         os.environ['XENOSYNC_AGENT_UID'] = uid
+        if agent.worktree_path:
+            os.environ['XENOSYNC_WORKTREE_PATH'] = agent.worktree_path
+            os.environ['XENOSYNC_WORKTREE_BRANCH'] = agent.worktree_branch
         
         # Start Claude session
         try:

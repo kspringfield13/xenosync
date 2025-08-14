@@ -14,9 +14,9 @@ from .file_session_manager import SessionManager, Session, SessionStatus
 from .prompt_manager import PromptManager, SyncPrompt
 from .exceptions import SyncError, SyncInterrupted
 from .agent_manager import AgentManager
-from .file_coordination import CoordinationManager
+from .git_coordination import GitWorktreeCoordinator
 from .tmux_manager import TmuxManager
-from .execution_strategies import ExecutionStrategy, ParallelStrategy
+from .git_strategies import GitParallelStrategy
 
 
 logger = logging.getLogger(__name__)
@@ -36,8 +36,8 @@ class XenosyncOrchestrator:
         
         # Initialize multi-agent components
         self.agent_manager = AgentManager(config, num_agents=self.num_agents)
-        self.coordination = CoordinationManager(config)
-        self.strategy = ParallelStrategy(self.agent_manager, self.coordination)
+        self.coordination = GitWorktreeCoordinator(config)
+        self.strategy = GitParallelStrategy(self.agent_manager, self.coordination)
         
         # Initialize TmuxManager for visual monitoring
         if config.get('use_tmux', True):
@@ -112,14 +112,18 @@ class XenosyncOrchestrator:
                         auto_open=True
                     )
             
+            # Initialize git worktree session
+            logger.info("Initializing git worktree coordination")
+            self.coordination.initialize_session(session.id, self.num_agents)
+            
             # Set coordination manager in agent manager for work tracking
             self.agent_manager.set_coordination_manager(self.coordination)
             
             # Set strategy in agent manager for task callbacks
             self.agent_manager.set_strategy(self.strategy)
             
-            # Initialize agents
-            logger.info(f"Initializing {self.num_agents} agents...")
+            # Initialize agents (will create worktrees)
+            logger.info(f"Initializing {self.num_agents} agents with worktrees...")
             await self.agent_manager.initialize_agents(session.id)
             
             # Execute using the selected strategy
@@ -155,6 +159,16 @@ class XenosyncOrchestrator:
             if self.agent_manager:
                 force_exit = self.interrupted
                 await self.agent_manager.shutdown(force_exit=force_exit)
+            
+            # Clean up git worktrees
+            if self.coordination and session:
+                try:
+                    logger.info("Cleaning up git worktrees")
+                    keep_branches = self.config.get('keep_branches_after_session', False)
+                    cleanup_stats = self.coordination.cleanup_session(session.id, keep_branches=keep_branches)
+                    logger.info(f"Cleanup stats: {cleanup_stats}")
+                except Exception as e:
+                    logger.error(f"Error cleaning up worktrees: {e}")
             
             # Always attempt tmux cleanup regardless of conditions
             self._cleanup_tmux_sessions()
@@ -218,8 +232,8 @@ class XenosyncOrchestrator:
         # Get agent statuses from agent_manager
         agent_metrics = self.agent_manager.get_agent_metrics()
         
-        # Get coordination data
-        coord_summary = self.coordination.get_coordination_summary(session.id)
+        # Get coordination data from git
+        coord_summary = self.coordination.get_session_status()
         
         # Get actual work progress
         work_progress = await self._calculate_work_progress(session)
@@ -239,12 +253,13 @@ class XenosyncOrchestrator:
             
             # Show what the agent is working on if available
             if agent['status'] == 'working':
-                current_work = self.coordination.get_agent_current_work(
-                    agent['uid'], session.id
-                )
-                if current_work:
-                    desc = current_work.get('description', 'Unknown task')
-                    logger.info(f"    └─ Working on: {desc[:50]}...")
+                # Get progress from git coordinator
+                progress = self.coordination.track_agent_progress(agent['id'])
+                if progress and progress.get('task_number'):
+                    task_num = progress['task_number']
+                    branch = progress.get('branch', 'unknown')
+                    commits = progress.get('commits', 0)
+                    logger.info(f"    └─ Task {task_num} on branch {branch} ({commits} commits)")
         
         # Work Progress
         logger.info("")
@@ -303,69 +318,45 @@ class XenosyncOrchestrator:
             return f"{secs}s"
 
     async def _calculate_work_progress(self, session: Session) -> Dict[str, int]:
-        """Calculate actual work progress from coordination data"""
+        """Calculate actual work progress from git coordination data"""
         
-        # Get all work items from the session
-        all_claims = self.coordination.get_all_claims(session.id)
-        completed_work = self.coordination.get_completed_work(session.id)
+        # Get session status from git coordinator
+        git_status = self.coordination.get_session_status()
         
-        # Get task registry for most accurate status
-        task_registry = self.coordination.get_task_registry(session.id)
+        if git_status.get('status') == 'no_session':
+            return {
+                'total_tasks': 0,
+                'pending_tasks': 0,
+                'claimed_tasks': 0,
+                'in_progress_tasks': 0,
+                'completed_tasks': 0,
+                'failed_tasks': 0
+            }
         
-        # Count by status from task registry (most accurate)
-        pending = 0
-        claimed = 0
-        in_progress = 0
-        completed = 0
-        failed = 0
+        # Extract task counts from git status
+        total_tasks = git_status.get('total_tasks', 0)
+        completed_tasks = git_status.get('completed_tasks', 0)
+        in_progress_tasks = git_status.get('in_progress_tasks', 0)
+        assigned_tasks = git_status.get('assigned_tasks', 0)
         
-        if task_registry:
-            pending = sum(1 for t in task_registry.values() if t.get('status') == 'pending')
-            claimed = sum(1 for t in task_registry.values() if t.get('status') == 'claimed')
-            in_progress = sum(1 for t in task_registry.values() if t.get('status') == 'in_progress')
-            completed = sum(1 for t in task_registry.values() if t.get('status') == 'completed')
-            failed = sum(1 for t in task_registry.values() if t.get('status') == 'failed')
-            total_tasks = len(task_registry)
-        else:
-            # Fallback to claims if no task registry
-            claimed = sum(1 for c in all_claims if c.get('status') == 'claimed')
-            in_progress = sum(1 for c in all_claims if c.get('status') == 'in_progress')
-            completed_from_claims = sum(1 for c in all_claims if c.get('status') == 'completed')
-            failed_from_claims = sum(1 for c in all_claims if c.get('status') == 'failed')
-            
-            # Also check completed work log
-            completed_from_log = len([w for w in completed_work if w.get('success', False)])
-            failed_from_log = len([w for w in completed_work if not w.get('success', False)])
-            
-            # Use the maximum of completed counts (claims vs log)
-            completed = max(completed_from_log, completed_from_claims)
-            failed = max(failed_from_log, failed_from_claims)
-            
-            # Get total tasks from the prompt
-            total_tasks = 0
-            if self.current_prompt and hasattr(self.current_prompt, 'steps'):
-                total_tasks = len(self.current_prompt.steps)
-            
-            # If we have claims but no prompt info, calculate from claims
-            if total_tasks == 0 and all_claims:
-                total_tasks = len(all_claims)
+        # Calculate failed (if any tasks are marked failed in agent status)
+        failed_tasks = 0
+        for agent in git_status.get('agents', []):
+            for task in agent.get('tasks', []):
+                if task.get('status') == 'failed':
+                    failed_tasks += 1
         
-        # Also check strategy assignments if available
-        if hasattr(self.strategy, 'assignments') and self.strategy.assignments:
-            # Get counts from strategy assignments
-            strategy_total = len(self.strategy.assignments)
-            
-            # Use strategy total if task registry is empty
-            if not task_registry and strategy_total > 0:
-                total_tasks = max(total_tasks, strategy_total)
+        # If no total from git status, get from prompt
+        if total_tasks == 0 and self.current_prompt and hasattr(self.current_prompt, 'steps'):
+            total_tasks = len(self.current_prompt.steps)
         
         return {
             'total_tasks': total_tasks,
-            'pending_tasks': pending,
-            'claimed_tasks': claimed,
-            'in_progress_tasks': in_progress,
-            'completed_tasks': completed,
-            'failed_tasks': failed
+            'pending_tasks': total_tasks - (assigned_tasks + in_progress_tasks + completed_tasks + failed_tasks),
+            'claimed_tasks': assigned_tasks,
+            'in_progress_tasks': in_progress_tasks,
+            'completed_tasks': completed_tasks,
+            'failed_tasks': failed_tasks
         }
     
     def interrupt(self):

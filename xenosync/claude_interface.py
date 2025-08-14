@@ -34,6 +34,9 @@ class ClaudeInterface:
         self.tmux_pane_mode = False
         self.tmux_shared_session = None
         self.tmux_pane_id = None
+        
+        # Working directory for git worktree support
+        self.working_directory: Optional[str] = None
     
     def set_tmux_pane_mode(self, session_name: str, pane_id: int):
         """Configure to use a specific tmux pane in a shared session"""
@@ -184,11 +187,15 @@ class ClaudeInterface:
         """Start Claude process directly"""
         cmd = self.config.claude_command
         
+        # Set working directory if specified
+        cwd = self.working_directory if self.working_directory else None
+        
         self.process = await asyncio.create_subprocess_exec(
             *cmd,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
+            cwd=cwd
         )
         
         # Start output monitoring
