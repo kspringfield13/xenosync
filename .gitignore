@@ -33,6 +33,9 @@ xenosync-sessions/archive/
 .xenosync/
 *.tmp
 *.bak
+.xenosync_coordination/
+.xenosync_session
+xsync-sessions/
 
 # IDE
 .vscode/
