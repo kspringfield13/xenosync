@@ -9,7 +9,7 @@
 
 ## What is Xenosync?
 
-Xenosync orchestrates multiple Claude Code AI agents to work together on complex software development tasks. Run 2-20 agents in parallel or collaborative mode to build applications, refactor code, and solve engineering challenges faster.
+Xenosync orchestrates multiple Claude Code AI agents to work together on complex software development tasks. Run 2-20 agents in parallel to build applications, refactor code, and solve engineering challenges faster.
 
 ## Prerequisites
 
@@ -39,29 +39,16 @@ xenosync start --agents 4
 
 # Run a specific prompt file
 xenosync start my_prompt.yaml --agents 3
-
-# Use collaborative mode for interdependent tasks
-xenosync start prompt.yaml --agents 4 --mode collaborative
 ```
 
-## Execution Modes
+## How It Works
 
-### Parallel Mode (Default)
-Tasks are pre-distributed among agents. Each agent works independently on their assigned tasks.
+Xenosync uses parallel execution to distribute tasks among agents upfront. Each agent works independently on their assigned tasks, maximizing efficiency and throughput.
 
-**Use when**: Tasks are independent, building separate components, parallel development
-
-```bash
-xenosync start prompt.yaml --agents 4 --mode parallel
-```
-
-### Collaborative Mode  
-Agents dynamically claim tasks from a shared pool and can build on each other's work.
-
-**Use when**: Tasks are interdependent, need coordination, complex systems
+**Best for**: Building separate components, parallel development, independent tasks
 
 ```bash
-xenosync start prompt.yaml --agents 3 --mode collaborative
+xenosync start prompt.yaml --agents 4
 ```
 
 ## Demo Example - Retro Game Build
@@ -69,11 +56,8 @@ xenosync start prompt.yaml --agents 3 --mode collaborative
 Experience xenosync's power by building a complete Pac-Man style arcade game. This demo serves as our primary performance benchmark:
 
 ```bash
-# Parallel mode - Agents divide game components (graphics, AI, controls, sound)
-xenosync start prompts/demos/retro-game.yaml --agents 4 --mode parallel
-
-# Collaborative mode - Agents coordinate on interdependent game systems
-xenosync start prompts/demos/retro-game.yaml --agents 4 --mode collaborative
+# Agents divide game components (graphics, AI, controls, sound) and work in parallel
+xenosync start prompts/demos/retro-game.yaml --agents 4
 ```
 
 This builds a fully playable retro arcade game with:
@@ -149,7 +133,6 @@ claude_args: ['--dangerously-skip-permissions']
 
 # Multi-agent defaults
 num_agents: 2                # Minimum 2 agents required
-execution_mode: parallel     # parallel or collaborative
 
 # Timing (optimized for Claude Code)
 agent_monitor_interval: 30   # Check agents every 30 seconds
@@ -195,11 +178,10 @@ The file-based coordination system prevents conflicts automatically. If you see 
 
 ## Tips for Best Results
 
-1. **Start with 3-4 agents** - Good balance of parallelism and coordination
-2. **Use parallel mode** for independent tasks like building separate features
-3. **Use collaborative mode** for complex, interconnected work
-4. **Break large tasks into smaller steps** in your YAML prompts
-5. **Let agents run** - They work best with minimal intervention
+1. **Start with 3-4 agents** - Good balance of parallelism and efficiency
+2. **Break large tasks into smaller steps** in your YAML prompts
+3. **Let agents run** - They work best with minimal intervention
+4. **Structure tasks clearly** - Well-defined tasks lead to better parallel execution
 
 ## Development
 

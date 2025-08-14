@@ -23,22 +23,8 @@
     "estimated_duration": 30,
     "priority": "medium"
   },
-  "task_7_visual_effects": {
-    "agent_id": "agent_4_20250808_105734_236bcaee",
-    "task_description": "TASK 7: Develop visual effects and animations - Pixel-perfect sprite animations, classic arcade color palette, smooth movement interpolation, death animations, ghost animation states, particle effects, screen flash effects, CRT overlay, and attract mode demo",
-    "claimed_at": "2025-08-08T10:59:45Z",
-    "files": ["js/animations.js", "js/particles.js", "js/effects.js", "css/visual-effects.css"],
-    "estimated_duration": 50,
-    "priority": "medium"
-  },
-  "task_5_ghost_ai": {
-    "agent_id": "agent_5_20250808_120231_787f16ff",
-    "task_description": "TASK 5: Build ghost AI with unique behaviors - Implement four classic ghost personalities (Blinky, Pinky, Inky, Clyde), scatter/chase/frightened modes, pathfinding algorithm, and ghost house exit logic",
-    "claimed_at": "2025-08-08T12:02:31Z",
-    "files": ["js/ghosts.js", "js/ghostAI.js", "js/pathfinding.js", "js/ghostBehaviors.js"],
-    "estimated_duration": 40,
-    "priority": "high"
-  },
+
+
   "task_2_maze_system": {
     "agent_id": "agent_2_20250808_120204_787f16ff",
     "task_description": "TASK 2: Implement maze generation and rendering system - Create maze data structure (2D array), classic Pac-Man maze layout, maze rendering with walls/paths, dot and power pellet placement, tunnel/warp zones, ghost house in center, optimize rendering for performance",

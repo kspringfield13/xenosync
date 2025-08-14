@@ -1,11 +1,11 @@
 """
-Agent Manager - Manages multiple Claude instances for parallel execution
+Agent Manager - Simplified management of multiple Claude instances for parallel execution
 """
 
 import asyncio
 import logging
 import re
-import time
+import os
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -20,35 +20,34 @@ logger = logging.getLogger(__name__)
 
 
 class AgentStatus(Enum):
-    """Agent status states"""
-    STARTING = "starting"
-    READY = "ready"
-    WORKING = "working"
-    IDLE = "idle"
-    ERROR = "error"
-    STOPPED = "stopped"
+    """Simplified agent status states"""
+    STARTING = "starting"  # Agent is being initialized
+    WORKING = "working"    # Agent is actively processing (detected by "...ing..." pattern)
+    ERROR = "error"        # Agent has encountered an error that needs recovery
+    STOPPED = "stopped"    # Agent has been shut down
 
 
 @dataclass
 class Agent:
-    """Individual agent instance"""
+    """Simplified agent instance"""
     id: int
-    uid: str  # Unique identifier for coordination
+    uid: str
     session_id: str
     status: AgentStatus = AgentStatus.STARTING
-    current_step: Optional[int] = None
-    claimed_work: List[str] = field(default_factory=list)
-    completed_steps: List[int] = field(default_factory=list)
     start_time: datetime = field(default_factory=datetime.now)
     last_activity: datetime = field(default_factory=datetime.now)
     last_message_sent: Optional[datetime] = None
     error: Optional[str] = None
-    metrics: Dict[str, Any] = field(default_factory=dict)
+    recovery_attempts: int = 0
+    # Task timing fields
+    current_task_start_time: Optional[datetime] = None
+    current_task_number: Optional[int] = None
+    last_completion_check: Optional[datetime] = None
     
     @property
     def is_available(self) -> bool:
-        """Check if agent is available for work"""
-        return self.status in [AgentStatus.READY, AgentStatus.IDLE]
+        """Check if agent is available for work (not in error or stopped state)"""
+        return self.status not in [AgentStatus.ERROR, AgentStatus.STOPPED]
     
     @property
     def uptime(self) -> float:
@@ -64,106 +63,86 @@ class Agent:
         if not self.last_message_sent:
             return None
         return (datetime.now() - self.last_message_sent).total_seconds()
-
-
-class AgentPool:
-    """Pool of agents for load distribution"""
     
-    def __init__(self, size: int = 1):
-        self.size = size
-        self.agents: List[Agent] = []
-        self._next_agent_idx = 0
+    def start_task(self, task_number: int):
+        """Mark the start of a new task"""
+        self.current_task_number = task_number
+        self.current_task_start_time = datetime.now()
+        self.last_completion_check = None
+        logger.debug(f"Agent {self.id} started task {task_number} at {self.current_task_start_time}")
     
-    def add_agent(self, agent: Agent):
-        """Add agent to pool"""
-        self.agents.append(agent)
-    
-    def get_available_agent(self) -> Optional[Agent]:
-        """Get next available agent using round-robin"""
-        available = [a for a in self.agents if a.is_available]
-        if not available:
-            return None
+    def can_check_for_completion(self, min_duration_seconds: int = 180) -> bool:
+        """Check if enough time has passed to check for task completion"""
+        if not self.current_task_start_time:
+            return False
         
-        # Round-robin selection
-        agent = available[self._next_agent_idx % len(available)]
-        self._next_agent_idx += 1
-        return agent
+        elapsed = (datetime.now() - self.current_task_start_time).total_seconds()
+        return elapsed >= min_duration_seconds
     
-    def get_agent_by_id(self, agent_id: int) -> Optional[Agent]:
-        """Get specific agent by ID"""
-        for agent in self.agents:
-            if agent.id == agent_id:
-                return agent
-        return None
+    def time_since_last_check(self) -> float:
+        """Get seconds since last completion check"""
+        if not self.last_completion_check:
+            return float('inf')
+        return (datetime.now() - self.last_completion_check).total_seconds()
     
-    def get_idle_agents(self, threshold_seconds: int = 60) -> List[Agent]:
-        """Get agents that have been idle for threshold seconds"""
-        now = datetime.now()
-        idle_agents = []
-        
-        for agent in self.agents:
-            if agent.status == AgentStatus.IDLE:
-                idle_time = (now - agent.last_activity).total_seconds()
-                if idle_time > threshold_seconds:
-                    idle_agents.append(agent)
-        
-        return idle_agents
-    
-    def get_statistics(self) -> Dict[str, Any]:
-        """Get pool statistics"""
-        status_counts = {}
-        for agent in self.agents:
-            status = agent.status.value
-            status_counts[status] = status_counts.get(status, 0) + 1
-        
-        total_steps = sum(len(a.completed_steps) for a in self.agents)
-        avg_uptime = sum(a.uptime for a in self.agents) / len(self.agents) if self.agents else 0
-        
-        return {
-            'total_agents': len(self.agents),
-            'status_breakdown': status_counts,
-            'total_completed_steps': total_steps,
-            'average_uptime_seconds': avg_uptime,
-            'available_agents': len([a for a in self.agents if a.is_available])
-        }
+    def get_task_elapsed_time(self) -> float:
+        """Get seconds since current task started"""
+        if not self.current_task_start_time:
+            return 0.0
+        return (datetime.now() - self.current_task_start_time).total_seconds()
 
 
 class AgentManager:
-    """Manages multiple Claude agent instances"""
+    """Simplified manager for multiple Claude agent instances"""
     
-    def __init__(self, config: Config, num_agents: int = 1):
+    def __init__(self, config: Config, num_agents: int = 2):
         self.config = config
-        self.num_agents = num_agents
-        self.pool = AgentPool(num_agents)
+        self.num_agents = max(2, num_agents)  # Minimum 2 agents
+        self.agents: List[Agent] = []
         self.interfaces: Dict[int, ClaudeInterface] = {}
-        self._agent_tasks: Dict[int, asyncio.Task] = {}
         self._monitoring_task: Optional[asyncio.Task] = None
         self._shutdown = False
+        self._next_agent_idx = 0  # For round-robin distribution
         self.tmux_manager = None  # Will be set if tmux is available
+        self.coordination = None  # Will be set by orchestrator
+        self.strategy = None  # Will be set by orchestrator for task callbacks
+        self._agent_work_tracking = {}  # Track previous status for work completion
+        
+        # Task timing configuration
+        self.task_minimum_duration = config.get('task_minimum_duration', 300)  # 5 minutes default
+        self.task_completion_check_interval = config.get('task_completion_check_interval', 180)  # 3 minutes default
+        logger.info(f"Task timing: min {self.task_minimum_duration}s, check interval {self.task_completion_check_interval}s")
     
     def set_tmux_manager(self, tmux_manager):
         """Set the tmux manager for visual monitoring"""
         self.tmux_manager = tmux_manager
     
+    def set_coordination_manager(self, coordination):
+        """Set the coordination manager for work tracking"""
+        self.coordination = coordination
+    
+    def set_strategy(self, strategy):
+        """Set the execution strategy for task callbacks"""
+        self.strategy = strategy
+    
     async def initialize_agents(self, session_id: str) -> List[Agent]:
         """Initialize all agent instances"""
         logger.info(f"Initializing {self.num_agents} agents for session {session_id}")
         
-        agents = []
         for i in range(self.num_agents):
             agent = await self._create_agent(i, session_id)
-            agents.append(agent)
-            self.pool.add_agent(agent)
+            self.agents.append(agent)
             
             # Stagger agent launches
             if i < self.num_agents - 1:
-                await asyncio.sleep(self.config.get('agent_launch_delay', 5))
+                launch_delay = self.config.get('agent_launch_delay', 3)
+                await asyncio.sleep(launch_delay)
         
         # Start monitoring
         self._monitoring_task = asyncio.create_task(self._monitor_agents())
         
         logger.info(f"All {self.num_agents} agents initialized")
-        return agents
+        return self.agents
     
     async def _create_agent(self, agent_id: int, session_id: str) -> Agent:
         """Create and start a single agent"""
@@ -183,18 +162,16 @@ class AgentManager:
         
         # If tmux manager is available, tell the interface to use a specific pane
         if self.tmux_manager:
-            # Set the interface to use tmux pane mode
             interface.set_tmux_pane_mode(self.tmux_manager.session, agent_id)
         
         # Set environment variables for coordination
-        import os
         os.environ['XENOSYNC_SESSION_ID'] = session_id
         os.environ['XENOSYNC_AGENT_UID'] = uid
         
-        # Start Claude session with coordination info
+        # Start Claude session
         try:
             await interface.start(f"{session_id}_agent_{agent_id}", agent_uid=uid)
-            agent.status = AgentStatus.READY
+            agent.status = AgentStatus.WORKING  # Assume working initially
             agent.update_activity()
             logger.info(f"Agent {agent_id} ({uid}) started successfully")
         except Exception as e:
@@ -205,9 +182,27 @@ class AgentManager:
         
         return agent
     
+    def get_agent_by_id(self, agent_id: int) -> Optional[Agent]:
+        """Get specific agent by ID"""
+        for agent in self.agents:
+            if agent.id == agent_id:
+                return agent
+        return None
+    
+    def get_available_agent(self) -> Optional[Agent]:
+        """Get next available agent using round-robin"""
+        available = [a for a in self.agents if a.is_available]
+        if not available:
+            return None
+        
+        # Round-robin selection
+        agent = available[self._next_agent_idx % len(available)]
+        self._next_agent_idx += 1
+        return agent
+    
     async def send_to_agent(self, agent_id: int, message: str) -> bool:
         """Send message to specific agent"""
-        agent = self.pool.get_agent_by_id(agent_id)
+        agent = self.get_agent_by_id(agent_id)
         if not agent:
             logger.error(f"Agent {agent_id} not found")
             return False
@@ -236,17 +231,17 @@ class AgentManager:
             return False
     
     async def broadcast_to_all(self, message: str):
-        """Send message to all agents"""
+        """Send message to all available agents"""
         tasks = []
-        for agent in self.pool.agents:
-            if agent.status != AgentStatus.ERROR:
+        for agent in self.agents:
+            if agent.is_available:
                 tasks.append(self.send_to_agent(agent.id, message))
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
         successful = sum(1 for r in results if r is True)
         logger.info(f"Broadcast sent to {successful}/{len(tasks)} agents")
     
-    async def get_agent_output(self, agent_id: int, lines: int = 50) -> Optional[str]:
+    async def get_agent_output(self, agent_id: int, lines: int = 10) -> Optional[str]:
         """Get recent output from specific agent"""
         interface = self.interfaces.get(agent_id)
         if not interface:
@@ -258,428 +253,324 @@ class AgentManager:
             logger.error(f"Failed to get output from agent {agent_id}: {e}")
             return None
     
-    async def check_agent_working(self, agent_id: int) -> bool:
-        """Check if agent is actively working based on Claude Code status indicators"""
-        agent = self.pool.get_agent_by_id(agent_id)
-        
-        # First check timing - if we recently sent a message, likely still working
-        if agent and agent.time_since_message():
-            time_since = agent.time_since_message()
-            grace_period = self.config.message_grace_period
-            if time_since < grace_period:  # Grace period - assume working during this time
-                logger.debug(f"Agent {agent_id} in grace period ({time_since:.1f}s since message, grace={grace_period}s)")
-                return True
-        
-        output = await self.get_agent_output(agent_id, lines=30)  # Increased from 10 to 30
-        if not output:
+    async def is_agent_running(self, agent_id: int) -> bool:
+        """Check if agent process is still running"""
+        interface = self.interfaces.get(agent_id)
+        if not interface:
             return False
         
-        # Log output for debugging (first and last few lines)
-        output_lines = output.strip().split('\n')
-        if len(output_lines) > 5:
-            sample_output = f"First: '{output_lines[0]}' ... Last: '{output_lines[-1]}'"
-        else:
-            sample_output = f"'{output.strip()[:100]}...'"
-        logger.debug(f"Agent {agent_id} output sample: {sample_output}")
-        
-        # Claude Code displays working status as random verbs ending in "ing..."
-        # Examples: "Cooking...", "Booping...", "Considering...", "Transmuting..."
-        # Often followed by timing info: "Cooking... (121s • 4.4k tokens • esc to interrupt)"
-        
-        # Pattern to match working indicators - broader pattern for any word ending in ing...
-        working_pattern = re.compile(
-            r'\b\w+ing\.\.\..*?(?:\([^)]*\))?\s*(?:esc to interrupt)?\s*$', 
-            re.MULTILINE | re.IGNORECASE
-        )
-        
-        # Also match the simple pattern without extra info
-        simple_working_pattern = re.compile(r'\b\w+ing\.\.\.\s*$', re.MULTILINE | re.IGNORECASE)
-        
-        # Additional pattern for processing-type statuses that Claude Code might use
-        processing_pattern = re.compile(r'\b(?:processing|analyzing|generating|building)\b.*\.\.\.', re.IGNORECASE)
-        
-        # Check for working patterns
-        is_working = bool(
-            working_pattern.search(output) or 
-            simple_working_pattern.search(output) or 
-            processing_pattern.search(output)
-        )
-        
-        if is_working:
-            if agent:
-                # Extract the actual working status for logging
-                match = (working_pattern.search(output) or 
-                        simple_working_pattern.search(output) or 
-                        processing_pattern.search(output))
-                if match:
-                    status_text = match.group().strip()
-                    logger.debug(f"Agent {agent_id} is working: '{status_text}'")
-                
-                # Update agent status if not already working
-                if agent.status != AgentStatus.WORKING:
-                    agent.status = AgentStatus.WORKING
-                    agent.update_activity()
-                    logger.info(f"Agent {agent_id} detected as working: {status_text}")
-        else:
-            # Log when no working pattern is found (for debugging)
-            logger.debug(f"Agent {agent_id} no working pattern found in output")
-        
-        return is_working
+        try:
+            return await interface.is_running()
+        except Exception as e:
+            logger.error(f"Failed to check if agent {agent_id} is running: {e}")
+            return False
     
-    async def check_agent_ready(self, agent_id: int) -> bool:
-        """Check if agent is ready for input (only if not actively working)"""
-        # First check if agent is actively working
-        if await self.check_agent_working(agent_id):
-            return False  # Agent is working, not ready for new input
+    async def check_agent_working(self, agent_id: int) -> bool:
+        """Check if agent is actively working using enhanced pattern detection"""
+        agent = self.get_agent_by_id(agent_id)
+        if not agent:
+            return False
         
+        # Get more lines of output for better pattern detection
         output = await self.get_agent_output(agent_id, lines=20)
         if not output:
+            # If no output available, use grace period as fallback
+            if agent.time_since_message():
+                time_since = agent.time_since_message()
+                grace_period = self.config.get('message_grace_period', 30)
+                if time_since < grace_period:
+                    logger.debug(f"Agent {agent_id} in grace period ({time_since:.1f}s < {grace_period}s)")
+                    return True
             return False
         
-        # Check for Claude ready indicators only if not working
-        ready_indicators = [
-            "ready",
-            "completed",
-            "finished",
-            "done",
-            ">",  # Claude prompt
+        # Enhanced working patterns
+        working_patterns = [
+            r'\w+ing\.\.\.+',  # Standard *ing... patterns (Thinking..., Processing...)
+            r'(thinking|processing|analyzing|creating|writing|building|implementing|working|compiling|testing|debugging|planning|designing|coding|executing)[^\w]*\.\.\.+',
+            r'(in progress|working on|currently|please wait)',
+            r'(step \d+|task \d+|phase \d+)',  # Step/task indicators
+            r'\.\.\.+$',  # Lines ending with ...
         ]
         
-        output_lower = output.lower()
-        is_ready = any(indicator in output_lower for indicator in ready_indicators)
+        lines = output.strip().split('\n')
+        # Check last 10 non-empty lines for working patterns
+        recent_lines = [line.strip() for line in lines if line.strip()][-10:]
         
-        # Additional check: make sure there's no working indicator present
-        if is_ready:
-            # Double-check there's no working pattern
-            working_pattern = re.compile(r'\b\w+ing\.\.\.', re.IGNORECASE)
-            if working_pattern.search(output):
-                logger.debug(f"Agent {agent_id} shows ready indicators but still has working pattern")
-                return False
+        for line in recent_lines:
+            for pattern in working_patterns:
+                if re.search(pattern, line, re.IGNORECASE):
+                    logger.debug(f"Agent {agent_id} working pattern found: '{line}' (matched: {pattern})")
+                    return True
         
-        if is_ready:
-            agent = self.pool.get_agent_by_id(agent_id)
-            if agent and agent.status == AgentStatus.WORKING:
-                agent.status = AgentStatus.IDLE
-                agent.update_activity()
-                logger.info(f"Agent {agent_id} became idle")
+        # Grace period as final fallback only if no patterns found
+        if agent.time_since_message():
+            time_since = agent.time_since_message()
+            grace_period = self.config.get('message_grace_period', 30)
+            if time_since < grace_period:
+                logger.debug(f"Agent {agent_id} in grace period ({time_since:.1f}s < {grace_period}s), no patterns found")
+                return True
         
-        return is_ready
+        logger.debug(f"Agent {agent_id} shows no working patterns in recent output")
+        return False
     
-    async def detect_api_error(self, agent_id: int) -> bool:
-        """Detect if an agent has encountered an API error"""
-        # First check if agent is actively working - if so, probably not an error
-        if await self.check_agent_working(agent_id):
-            return False
-        
-        output = await self.get_agent_output(agent_id, lines=30)
+    async def has_error_pattern(self, agent_id: int) -> bool:
+        """Check if agent output contains error patterns"""
+        output = await self.get_agent_output(agent_id, lines=20)
         if not output:
             return False
         
         error_patterns = [
             "api error",
-            "error: api",
             "rate limit",
-            "too many requests", 
+            "too many requests",
             "failed to respond",
-            "request failed",
             "connection error",
-            "network error",
-            "503 service",
-            "429 too many",
             "timeout",
-            "authentication failed",
-            "quota exceeded",
             "service unavailable"
         ]
         
         output_lower = output.lower()
-        
-        # Check for error patterns
-        has_error = any(pattern in output_lower for pattern in error_patterns)
-        
-        # Also check if agent has been stuck on same output
-        agent = self.pool.get_agent_by_id(agent_id)
-        if agent:
-            if not hasattr(agent, 'last_output_hash'):
-                agent.last_output_hash = hash(output)
-                agent.stuck_count = 0
-            else:
-                current_hash = hash(output)
-                if current_hash == agent.last_output_hash:
-                    agent.stuck_count += 1
-                    # Consider stuck after 3 checks (30 seconds)
-                    if agent.stuck_count >= 3 and has_error:
-                        logger.warning(f"Agent {agent_id} appears stuck with error pattern")
-                        return True
-                else:
-                    agent.last_output_hash = current_hash
-                    agent.stuck_count = 0
-        
-        return has_error and getattr(agent, 'stuck_count', 0) >= 2
+        return any(pattern in output_lower for pattern in error_patterns)
     
-    async def recover_from_error(self, agent_id: int) -> bool:
-        """Attempt to recover an agent from an API error"""
-        agent = self.pool.get_agent_by_id(agent_id)
+    async def handle_error_recovery(self, agent_id: int) -> bool:
+        """Handle error detection and recovery with exponential backoff"""
+        agent = self.get_agent_by_id(agent_id)
         if not agent:
             return False
-        
-        # Initialize recovery tracking
-        if not hasattr(agent, 'recovery_attempts'):
-            agent.recovery_attempts = 0
         
         agent.recovery_attempts += 1
         
-        # Progressive recovery strategies
-        recovery_commands = [
-            "--continue",
-            "Please retry the last operation and continue with your work",
-            "If you encountered an error, please try again with a different approach",
-            "Continue with your assigned tasks, skipping any problematic operations", 
-            "What is your current status? Please proceed with the next available task"
-        ]
+        # Exponential backoff: 5s, 10s, 20s, 40s
+        wait_times = [5, 10, 20, 40]
         
-        if agent.recovery_attempts <= len(recovery_commands):
-            command = recovery_commands[agent.recovery_attempts - 1]
-            logger.info(f"Recovery attempt {agent.recovery_attempts} for agent {agent_id}: {command}")
-            
-            # Send recovery command
-            success = await self.send_to_agent(agent_id, command)
-            if not success:
-                return False
-            
-            # Wait and check if recovery worked
-            await asyncio.sleep(15)
-            
-            # Check if agent has new output (recovery working)
-            new_output = await self.get_agent_output(agent_id, lines=10)
-            if new_output:
-                output_lower = new_output.lower()
-                
-                # First check if agent is showing working status (best indicator)
-                is_working = await self.check_agent_working(agent_id)
-                if is_working:
-                    logger.info(f"Agent {agent_id} recovery successful - agent is actively working!")
-                    agent.recovery_attempts = 0
-                    agent.stuck_count = 0
-                    agent.status = AgentStatus.WORKING
-                    agent.update_activity()
-                    return True
-                
-                # Look for other signs of recovery
-                recovery_indicators = [
-                    "continuing",
-                    "proceeding", 
-                    "working on",
-                    "starting",
-                    "let me",
-                    ">",  # New prompt
-                    "i'll",
-                    "sure"
-                ]
-                
-                has_recovery = any(indicator in output_lower for indicator in recovery_indicators)
-                no_new_errors = not any(pattern in output_lower for pattern in [
-                    "api error", "error:", "failed", "timeout"
-                ])
-                
-                if has_recovery and no_new_errors:
-                    logger.info(f"Agent {agent_id} recovery successful - showing recovery indicators")
-                    agent.recovery_attempts = 0
-                    agent.stuck_count = 0
-                    agent.status = AgentStatus.WORKING
-                    agent.update_activity()
-                    return True
-        
-        if agent.recovery_attempts >= len(recovery_commands):
-            logger.warning(f"Agent {agent_id} failed all recovery attempts, marking as ERROR")
+        if agent.recovery_attempts > 3:
+            # After 3 attempts, mark as ERROR
+            logger.error(f"Agent {agent_id} failed all recovery attempts")
             agent.status = AgentStatus.ERROR
-            agent.error = f"Failed to recover from API error after {agent.recovery_attempts} attempts"
+            agent.error = f"Failed to recover after {agent.recovery_attempts} attempts"
+            return False
+        
+        # Wait with exponential backoff
+        wait_time = wait_times[min(agent.recovery_attempts - 1, len(wait_times) - 1)]
+        logger.info(f"Recovery attempt {agent.recovery_attempts} for agent {agent_id}, waiting {wait_time}s")
+        await asyncio.sleep(wait_time)
+        
+        # Send recovery message
+        recovery_message = "Please continue with your assigned tasks. If you encountered an error, try again."
+        success = await self.send_to_agent(agent_id, recovery_message)
+        
+        if success:
+            # Wait a bit and check if agent recovered
+            await asyncio.sleep(5)
+            if await self.check_agent_working(agent_id):
+                logger.info(f"Agent {agent_id} recovered successfully")
+                agent.recovery_attempts = 0
+                agent.status = AgentStatus.WORKING
+                return True
         
         return False
     
-    async def force_recovery(self, agent_id: int) -> bool:
-        """Manually force recovery attempt for an agent"""
-        agent = self.pool.get_agent_by_id(agent_id)
-        if not agent:
-            logger.error(f"Agent {agent_id} not found for forced recovery")
-            return False
-        
-        logger.info(f"Forcing recovery for agent {agent_id}")
-        
-        # Reset recovery attempts for fresh start
-        if hasattr(agent, 'recovery_attempts'):
-            agent.recovery_attempts = 0
-        
-        # Try recovery
-        return await self.recover_from_error(agent_id)
-    
-    async def get_agent_status_report(self) -> Dict[str, Any]:
-        """Get detailed status report including error information"""
-        report = {
-            'total_agents': len(self.pool.agents),
-            'agents': [],
-            'error_summary': {
-                'agents_with_errors': 0,
-                'recovery_attempts': 0,
-                'successful_recoveries': 0
-            }
-        }
-        
-        for agent in self.pool.agents:
-            agent_info = {
-                'id': agent.id,
-                'status': agent.status.value,
-                'error': getattr(agent, 'error', None),
-                'recovery_attempts': getattr(agent, 'recovery_attempts', 0),
-                'stuck_count': getattr(agent, 'stuck_count', 0),
-                'uptime': agent.uptime
-            }
-            
-            report['agents'].append(agent_info)
-            
-            # Update error summary
-            if agent.status == AgentStatus.ERROR:
-                report['error_summary']['agents_with_errors'] += 1
-            
-            if hasattr(agent, 'recovery_attempts'):
-                report['error_summary']['recovery_attempts'] += agent.recovery_attempts
-                if agent.recovery_attempts > 0 and agent.status != AgentStatus.ERROR:
-                    report['error_summary']['successful_recoveries'] += 1
-        
-        return report
-    
     async def _monitor_agents(self):
-        """Monitor agent health and status"""
+        """Simplified monitoring loop with task completion tracking"""
         while not self._shutdown:
             try:
-                for agent in self.pool.agents:
-                    # Skip agents that are already stopped or in error state
-                    if agent.status in [AgentStatus.STOPPED, AgentStatus.ERROR]:
+                for agent in self.agents:
+                    if agent.status == AgentStatus.STOPPED:
                         continue
                     
-                    # Check if agent is still running
-                    interface = self.interfaces.get(agent.id)
-                    if interface and not await interface.is_running():
-                        if agent.status != AgentStatus.STOPPED:
-                            logger.warning(f"Agent {agent.id} stopped unexpectedly")
-                            agent.status = AgentStatus.STOPPED
-                            agent.error = "Process terminated"
+                    # Track previous status for transition detection
+                    previous_status = self._agent_work_tracking.get(agent.id)
+                    
+                    # Check if process is still running
+                    if not await self.is_agent_running(agent.id):
+                        agent.status = AgentStatus.STOPPED
+                        logger.warning(f"Agent {agent.id} process stopped")
                         continue
                     
-                    # Check for API errors and attempt recovery
-                    if agent.status in [AgentStatus.WORKING, AgentStatus.IDLE]:
-                        error_detected = await self.detect_api_error(agent.id)
-                        if error_detected:
-                            logger.warning(f"API error detected for agent {agent.id}, attempting recovery")
-                            recovery_success = await self.recover_from_error(agent.id)
-                            if recovery_success:
-                                logger.info(f"Successfully recovered agent {agent.id}")
-                            continue  # Skip other checks while recovering
-                    
-                    # Check agent working/idle status (only if not recovering from error)
+                    # Handle agents that are currently working
                     if agent.status == AgentStatus.WORKING:
-                        # Check if still working first
-                        if not await self.check_agent_working(agent.id):
-                            # Not actively working, check if ready/idle
-                            if await self.check_agent_ready(agent.id):
-                                # Status update happens in check_agent_ready() - no duplicate logging
-                                pass
-                    elif agent.status == AgentStatus.IDLE:
-                        # Check if idle agent has started working again
-                        if await self.check_agent_working(agent.id):
-                            agent.status = AgentStatus.WORKING
-                            logger.info(f"Agent {agent.id} started working again")
-                
-                # Log statistics periodically
-                if int(time.time()) % 60 == 0:  # Every minute
-                    stats = self.pool.get_statistics()
-                    logger.debug(f"Agent pool stats: {stats}")
+                        # Check if minimum task duration has passed
+                        if agent.can_check_for_completion(self.task_minimum_duration):
+                            # Check if enough time has passed since last check
+                            if agent.time_since_last_check() >= self.task_completion_check_interval:
+                                agent.last_completion_check = datetime.now()
+                                
+                                # Log timing info
+                                elapsed = agent.get_task_elapsed_time()
+                                logger.debug(f"Checking agent {agent.id} completion after {elapsed:.1f}s (task {agent.current_task_number})")
+                                
+                                # Check if agent is actually done using enhanced pattern detection
+                                is_working = await self.check_agent_working(agent.id)
+                                
+                                if is_working:
+                                    logger.info(f"Agent {agent.id} still working on task {agent.current_task_number} after {elapsed:.1f}s (patterns detected)")
+                                elif not is_working:
+                                    # Double-check with additional pattern verification
+                                    logger.info(f"Agent {agent.id} appears idle, performing double-check for working patterns")
+                                    
+                                    # Get more recent output for thorough check
+                                    output = await self.get_agent_output(agent.id, lines=30)
+                                    still_working = False
+                                    
+                                    if output:
+                                        # Look for any "*ing..." patterns in recent output
+                                        recent_lines = output.split('\n')[-15:]  # Last 15 lines
+                                        for line in recent_lines:
+                                            if re.search(r'\w+ing\.\.\.+', line.strip(), re.IGNORECASE):
+                                                logger.info(f"Agent {agent.id} still shows working patterns: '{line.strip()}'")
+                                                still_working = True
+                                                break
+                                    
+                                    if still_working:
+                                        logger.info(f"Agent {agent.id} kept working due to detected patterns after {elapsed:.1f}s")
+                                        continue  # Don't mark as complete, continue monitoring
+                                    
+                                    # Check for errors
+                                    if await self.has_error_pattern(agent.id):
+                                        logger.warning(f"Agent {agent.id} has error pattern, attempting recovery")
+                                        await self.handle_error_recovery(agent.id)
+                                    else:
+                                        # Task actually completed
+                                        logger.info(f"Agent {agent.id} confirmed completed task {agent.current_task_number} after {elapsed:.1f}s (no working patterns found)")
+                                        
+                                        # Process task completion
+                                        if self.coordination:
+                                            session_id = agent.session_id
+                                            
+                                            # Get all current work for this agent
+                                            all_claims = self.coordination.get_all_claims(session_id)
+                                            agent_claims = [c for c in all_claims 
+                                                          if c.get('agent_uid') == agent.uid 
+                                                          and c.get('status') == 'in_progress']
+                                            
+                                            if agent_claims:
+                                                # Try to detect files modified from recent output
+                                                files_modified = await self._detect_modified_files(agent.id)
+                                                
+                                                # Mark all agent's work as completed
+                                                for claim in agent_claims:
+                                                    # Complete the work claim
+                                                    self.coordination.complete_work(
+                                                        claim_id=claim['id'],
+                                                        agent_uid=agent.uid,
+                                                        session_id=session_id,
+                                                        files_modified=files_modified,
+                                                        success=True  # Assume success if no error pattern
+                                                    )
+                                                    
+                                                    # Update task registry if task_number is in metadata
+                                                    metadata = claim.get('metadata', {})
+                                                    task_number = metadata.get('task_number')
+                                                    if task_number:
+                                                        self.coordination.update_task_status(
+                                                            session_id=session_id,
+                                                            task_number=task_number,
+                                                            status='completed'
+                                                        )
+                                                    
+                                                    logger.info(f"Agent {agent.id} completed: {claim.get('description', 'Unknown')[:50]}")
+                                                
+                                                logger.info(f"Agent {agent.id} completed {len(agent_claims)} task(s)")
+                                                
+                                                # Clear current task info
+                                                agent.current_task_number = None
+                                                agent.current_task_start_time = None
+                                                
+                                                # Trigger next task delivery if strategy is available
+                                                if self.strategy and hasattr(self.strategy, 'send_next_task_to_agent'):
+                                                    logger.info(f"Requesting next task for agent {agent.id}")
+                                                    try:
+                                                        # Send next task from the agent's queue
+                                                        next_task_sent = await self.strategy.send_next_task_to_agent(
+                                                            agent.id, session_id
+                                                        )
+                                                        if next_task_sent:
+                                                            logger.info(f"Next task sent to agent {agent.id}")
+                                                            # Agent is now working on the next task
+                                                            agent.status = AgentStatus.WORKING
+                                                        else:
+                                                            logger.info(f"No more tasks for agent {agent.id}")
+                                                    except Exception as e:
+                                                        logger.error(f"Error sending next task to agent {agent.id}: {e}")
+                        else:
+                            # Task still in minimum duration period
+                            if agent.current_task_start_time:
+                                elapsed = agent.get_task_elapsed_time()
+                                if elapsed > 0 and int(elapsed) % 60 == 0:  # Log every minute during minimum period
+                                    remaining = self.task_minimum_duration - elapsed
+                                    logger.info(f"Agent {agent.id} working on task {agent.current_task_number} for {elapsed:.0f}s (minimum period: {remaining:.0f}s remaining)")
                     
-                    # Log recovery statistics
-                    recovery_stats = {}
-                    for agent in self.pool.agents:
-                        if hasattr(agent, 'recovery_attempts') and agent.recovery_attempts > 0:
-                            recovery_stats[agent.id] = agent.recovery_attempts
+                    # Handle agents that are not working (initial status check)
+                    else:
+                        # Check if agent has started working
+                        is_working = await self.check_agent_working(agent.id)
+                        
+                        if is_working:
+                            if agent.status != AgentStatus.WORKING:
+                                logger.info(f"Agent {agent.id} started working")
+                                agent.status = AgentStatus.WORKING
+                                agent.last_activity = datetime.now()
+                                agent.recovery_attempts = 0
                     
-                    if recovery_stats:
-                        logger.info(f"Recovery stats: {recovery_stats}")
+                    # Update tracking
+                    self._agent_work_tracking[agent.id] = agent.status
                 
             except Exception as e:
                 logger.error(f"Error in agent monitoring: {e}")
             
-            await asyncio.sleep(self.config.agent_monitor_interval)  # Check at configured interval
+            await asyncio.sleep(10)  # Check every 10 seconds
     
-    async def assign_step_to_agent(self, step_content: str, 
-                                  agent_id: Optional[int] = None) -> Optional[int]:
-        """Assign a step to an available agent"""
-        if agent_id is not None:
-            # Assign to specific agent
-            agent = self.pool.get_agent_by_id(agent_id)
-        else:
-            # Get next available agent
-            agent = self.pool.get_available_agent()
+    async def _detect_modified_files(self, agent_id: int) -> List[str]:
+        """Try to detect modified files from agent output"""
+        files = []
+        try:
+            output = await self.get_agent_output(agent_id, lines=50)
+            if output:
+                # Look for common file modification patterns
+                import re
+                # Match patterns like "Modified: filename.py" or "Writing to filename.py"
+                patterns = [
+                    r'(?:Modified|Writing to|Created|Updated|Saved)[:.]?\s+([^\s]+\.[a-zA-Z]+)',
+                    r'File\s+([^\s]+\.[a-zA-Z]+)\s+(?:modified|created|updated)',
+                ]
+                for pattern in patterns:
+                    matches = re.findall(pattern, output, re.IGNORECASE)
+                    files.extend(matches)
+        except Exception as e:
+            logger.debug(f"Could not detect modified files for agent {agent_id}: {e}")
         
-        if not agent:
-            logger.warning("No available agents for step assignment")
-            return None
-        
-        # Send step to agent
-        success = await self.send_to_agent(agent.id, step_content)
-        if success:
-            return agent.id
-        
-        return None
+        return list(set(files))  # Return unique files
     
-    async def distribute_steps(self, steps: List[str], 
-                             strategy: str = "round-robin") -> Dict[int, List[int]]:
-        """Distribute steps across agents using specified strategy"""
+    async def distribute_steps(self, steps: List[str]) -> Dict[int, List[int]]:
+        """Distribute steps across agents using round-robin"""
         assignments = {}
+        available_agents = [a for a in self.agents if a.is_available]
         
-        if strategy == "round-robin":
-            # Distribute evenly across available agents
-            available_agents = [a for a in self.pool.agents if a.is_available]
-            if not available_agents:
-                logger.error("No available agents for step distribution")
-                return assignments
-            
-            for i, step in enumerate(steps):
-                agent = available_agents[i % len(available_agents)]
-                if agent.id not in assignments:
-                    assignments[agent.id] = []
-                assignments[agent.id].append(i)
-                
-        elif strategy == "load-balanced":
-            # Assign to least loaded agents
-            for i, step in enumerate(steps):
-                # Find agent with fewest completed steps
-                agent = min(self.pool.agents, 
-                          key=lambda a: len(a.completed_steps) if a.is_available else float('inf'))
-                
-                if agent.is_available:
-                    if agent.id not in assignments:
-                        assignments[agent.id] = []
-                    assignments[agent.id].append(i)
+        if not available_agents:
+            logger.error("No available agents for step distribution")
+            return assignments
         
-        elif strategy == "broadcast":
-            # Send all steps to all agents (collaborative mode)
-            for agent in self.pool.agents:
-                if agent.is_available:
-                    assignments[agent.id] = list(range(len(steps)))
+        # Round-robin distribution
+        for i, step in enumerate(steps):
+            agent = available_agents[i % len(available_agents)]
+            if agent.id not in assignments:
+                assignments[agent.id] = []
+            assignments[agent.id].append(i)
         
-        logger.info(f"Distributed {len(steps)} steps using {strategy} strategy")
+        logger.info(f"Distributed {len(steps)} steps across {len(available_agents)} agents")
         return assignments
     
     async def wait_for_agents(self, timeout: Optional[int] = None) -> bool:
-        """Wait for all agents to become idle"""
+        """Wait for all agents to finish working"""
+        import time
         start_time = time.time()
         
         while True:
-            # Check if all agents are idle or stopped
-            working_agents = [a for a in self.pool.agents 
-                            if a.status == AgentStatus.WORKING]
+            # Check if any agents are still working
+            working_agents = [a for a in self.agents if a.status == AgentStatus.WORKING]
             
             if not working_agents:
-                logger.info("All agents are idle")
+                logger.info("All agents finished working")
                 return True
             
             # Check timeout
@@ -687,18 +578,10 @@ class AgentManager:
                 logger.warning(f"Timeout waiting for agents after {timeout}s")
                 return False
             
-            # Update agent states
-            for agent in working_agents:
-                await self.check_agent_ready(agent.id)
-            
-            await asyncio.sleep(self.config.wait_check_interval)
+            await asyncio.sleep(5)
     
     async def shutdown(self, force_exit=False):
-        """Shutdown all agents gracefully
-        
-        Args:
-            force_exit: If True, send exit command to agents. If False, keep them running.
-        """
+        """Shutdown all agents"""
         logger.info(f"Shutting down agent manager (force_exit={force_exit})")
         self._shutdown = True
         
@@ -710,15 +593,11 @@ class AgentManager:
             # Stop all agents
             for agent_id, interface in self.interfaces.items():
                 try:
-                    # Send exit command
                     await interface.send_message("/exit")
                     await asyncio.sleep(1)
-                    
-                    # Stop interface
                     await interface.stop()
                     
-                    # Update agent status
-                    agent = self.pool.get_agent_by_id(agent_id)
+                    agent = self.get_agent_by_id(agent_id)
                     if agent:
                         agent.status = AgentStatus.STOPPED
                         
@@ -728,31 +607,53 @@ class AgentManager:
             logger.info("All agents shut down")
         else:
             # Just update status without stopping
-            for agent_id in self.interfaces:
-                agent = self.pool.get_agent_by_id(agent_id)
-                if agent:
-                    agent.status = AgentStatus.IDLE
+            for agent in self.agents:
+                if agent.status != AgentStatus.ERROR:
+                    agent.status = AgentStatus.STOPPED
             
             logger.info("Agent manager shutdown (agents still running in tmux)")
     
     def get_agent_metrics(self) -> Dict[str, Any]:
-        """Get detailed metrics for all agents"""
-        metrics = {
-            'agents': [],
-            'summary': self.pool.get_statistics()
-        }
+        """Get simplified metrics for all agents"""
+        status_counts = {}
+        for agent in self.agents:
+            status = agent.status.value
+            status_counts[status] = status_counts.get(status, 0) + 1
         
-        for agent in self.pool.agents:
-            agent_metrics = {
-                'id': agent.id,
-                'uid': agent.uid,
-                'status': agent.status.value,
-                'uptime_seconds': agent.uptime,
-                'completed_steps': len(agent.completed_steps),
-                'current_step': agent.current_step,
-                'last_activity': agent.last_activity.isoformat(),
-                'error': agent.error
+        return {
+            'agents': [
+                {
+                    'id': agent.id,
+                    'uid': agent.uid,
+                    'status': agent.status.value,
+                    'uptime': agent.uptime,
+                    'error': agent.error
+                }
+                for agent in self.agents
+            ],
+            'summary': {
+                'total_agents': len(self.agents),
+                'status_breakdown': status_counts,
+                'available_agents': len([a for a in self.agents if a.is_available])
             }
-            metrics['agents'].append(agent_metrics)
+        }
+
+    # Compatibility methods for existing code
+    @property
+    def pool(self):
+        """Compatibility property for existing code that references self.pool"""
+        class PoolCompat:
+            def __init__(self, manager):
+                self.manager = manager
+            
+            @property
+            def agents(self):
+                return self.manager.agents
+            
+            def get_agent_by_id(self, agent_id: int):
+                return self.manager.get_agent_by_id(agent_id)
+            
+            def get_available_agent(self):
+                return self.manager.get_available_agent()
         
-        return metrics
+        return PoolCompat(self)

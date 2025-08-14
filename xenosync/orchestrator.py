@@ -16,7 +16,7 @@ from .exceptions import SyncError, SyncInterrupted
 from .agent_manager import AgentManager
 from .file_coordination import CoordinationManager
 from .tmux_manager import TmuxManager
-from .execution_strategies import ExecutionStrategy, ParallelStrategy, CollaborativeStrategy
+from .execution_strategies import ExecutionStrategy, ParallelStrategy
 
 
 logger = logging.getLogger(__name__)
@@ -33,17 +33,11 @@ class XenosyncOrchestrator:
         
         # Multi-agent configuration (always enabled)
         self.num_agents = max(2, config.get('num_agents', 2))  # Minimum 2 agents
-        self.execution_mode = config.get('execution_mode', 'parallel')  # Default to parallel
-        
-        # Validate execution mode
-        if self.execution_mode not in ['parallel', 'collaborative']:
-            logger.warning(f"Invalid execution mode '{self.execution_mode}', defaulting to 'parallel'")
-            self.execution_mode = 'parallel'
         
         # Initialize multi-agent components
         self.agent_manager = AgentManager(config, num_agents=self.num_agents)
         self.coordination = CoordinationManager(config)
-        self.strategy = self._get_execution_strategy()
+        self.strategy = ParallelStrategy(self.agent_manager, self.coordination)
         
         # Initialize TmuxManager for visual monitoring
         if config.get('use_tmux', True):
@@ -92,12 +86,7 @@ class XenosyncOrchestrator:
         except Exception as e:
             logger.error(f"Error during tmux cleanup: {e}")
     
-    def _get_execution_strategy(self) -> ExecutionStrategy:
-        """Get the appropriate execution strategy based on mode"""
-        if self.execution_mode == 'collaborative':
-            return CollaborativeStrategy(self.agent_manager, self.coordination)
-        else:  # Default to parallel
-            return ParallelStrategy(self.agent_manager, self.coordination)
+
     
     async def run(self, session: Session, prompt: SyncPrompt):
         """Run a multi-agent sync session"""
@@ -107,7 +96,7 @@ class XenosyncOrchestrator:
         
         try:
             logger.info(f"Starting multi-agent session: {session.id}")
-            logger.info(f"Mode: {self.execution_mode.upper()} | Agents: {self.num_agents}")
+            logger.info(f"Agents: {self.num_agents}")
             
             # Create tmux session for visual monitoring
             if self.tmux_manager and self.tmux_manager.is_tmux_available():
@@ -123,16 +112,22 @@ class XenosyncOrchestrator:
                         auto_open=True
                     )
             
+            # Set coordination manager in agent manager for work tracking
+            self.agent_manager.set_coordination_manager(self.coordination)
+            
+            # Set strategy in agent manager for task callbacks
+            self.agent_manager.set_strategy(self.strategy)
+            
             # Initialize agents
             logger.info(f"Initializing {self.num_agents} agents...")
             await self.agent_manager.initialize_agents(session.id)
             
             # Execute using the selected strategy
-            logger.info(f"Executing in {self.execution_mode} mode...")
+            logger.info(f"Executing tasks in parallel...")
             success = await self.strategy.execute(prompt, session.id)
             
             if not success:
-                raise SyncError(f"{self.execution_mode.capitalize()} execution failed")
+                raise SyncError(f"Parallel execution failed")
             
             # Mark session as completed
             self.session_manager.update_session_status(
@@ -165,21 +160,15 @@ class XenosyncOrchestrator:
             self._cleanup_tmux_sessions()
     
     async def _monitor_agents(self, session: Session):
-        """Monitor running agents without stopping them"""
+        """Monitor running agents with accurate status tracking"""
         logger.info("=" * 60)
-        logger.info(f"AGENTS EXECUTING IN {self.execution_mode.upper()} MODE")
+        logger.info("AGENTS EXECUTING IN PARALLEL MODE")
         logger.info("=" * 60)
         
-        if self.execution_mode == 'parallel':
-            logger.info("📊 Parallel Execution:")
-            logger.info("  • Tasks have been distributed among agents")
-            logger.info("  • Each agent works independently on assigned tasks")
-            logger.info("  • No coordination required between agents")
-        else:  # collaborative
-            logger.info("🤝 Collaborative Execution:")
-            logger.info("  • All agents can see all tasks")
-            logger.info("  • Agents claim work dynamically from the pool")
-            logger.info("  • Coordination happens through file system")
+        logger.info("📊 Parallel Execution:")
+        logger.info("  • Tasks have been distributed among agents")
+        logger.info("  • Each agent works independently on assigned tasks")
+        logger.info("  • No coordination required between agents")
         
         if self.tmux_manager:
             logger.info("")
@@ -197,32 +186,21 @@ class XenosyncOrchestrator:
         logger.info("Press Ctrl+C to shutdown agents and exit")
         logger.info("=" * 60)
         
+        # Initialize tracking variables
+        last_status_check = time.time()
+        status_interval = 30  # Show status every 30 seconds
+        
         # Monitor loop
         try:
-            monitor_interval = 0
             while not self.interrupted:
-                # Get agent metrics periodically
-                if self.agent_manager and monitor_interval % 12 == 0:  # Every minute
-                    metrics = self.agent_manager.get_agent_metrics()
-                    active = sum(1 for a in metrics['agents'] if a['status'] != 'stopped')
-                    
-                    if active > 0:
-                        # Get coordination summary
-                        coord_summary = self.coordination.get_coordination_summary(session.id)
-                        
-                        logger.info("")
-                        logger.info(f"📊 Status Update:")
-                        logger.info(f"  Active Agents: {active}/{self.num_agents}")
-                        logger.info(f"  Tasks Completed: {coord_summary['completed_tasks']}")
-                        logger.info(f"  Active Claims: {coord_summary['active_claims']}")
-                        
-                        if self.execution_mode == 'collaborative':
-                            logger.info(f"  Messages Sent: {coord_summary['messages_sent']}")
-                            if coord_summary['conflicts'] > 0:
-                                logger.info(f"  ⚠️  Conflicts: {coord_summary['conflicts']}")
+                current_time = time.time()
+                
+                # Show detailed status update every interval
+                if current_time - last_status_check >= status_interval:
+                    await self._show_detailed_status(session)
+                    last_status_check = current_time
                 
                 await asyncio.sleep(5)
-                monitor_interval += 1
                 
         except KeyboardInterrupt:
             logger.info("\nReceived shutdown signal in monitor")
@@ -233,6 +211,162 @@ class XenosyncOrchestrator:
             
             # Re-raise to propagate the interrupt
             raise
+    
+    async def _show_detailed_status(self, session: Session):
+        """Display detailed status of all agents and tasks"""
+        
+        # Get agent statuses from agent_manager
+        agent_metrics = self.agent_manager.get_agent_metrics()
+        
+        # Get coordination data
+        coord_summary = self.coordination.get_coordination_summary(session.id)
+        
+        # Get actual work progress
+        work_progress = await self._calculate_work_progress(session)
+        
+        # Display formatted status
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("📊 SYSTEM STATUS UPDATE")
+        logger.info("-" * 60)
+        
+        # Agent Status
+        logger.info("🤖 Agents:")
+        for agent in agent_metrics['agents']:
+            status_icon = self._get_status_icon(agent['status'])
+            uptime = self._format_uptime(agent['uptime'])
+            logger.info(f"  Agent {agent['id']}: {status_icon} {agent['status'].upper()} (uptime: {uptime})")
+            
+            # Show what the agent is working on if available
+            if agent['status'] == 'working':
+                current_work = self.coordination.get_agent_current_work(
+                    agent['uid'], session.id
+                )
+                if current_work:
+                    desc = current_work.get('description', 'Unknown task')
+                    logger.info(f"    └─ Working on: {desc[:50]}...")
+        
+        # Work Progress
+        logger.info("")
+        logger.info("📝 Work Progress:")
+        logger.info(f"  Total Tasks: {work_progress['total_tasks']}")
+        logger.info(f"  Pending: {work_progress.get('pending_tasks', 0)}")
+        logger.info(f"  Claimed: {work_progress['claimed_tasks']}")
+        logger.info(f"  In Progress: {work_progress['in_progress_tasks']}")
+        logger.info(f"  Completed: {work_progress['completed_tasks']} ✓")
+        logger.info(f"  Failed: {work_progress['failed_tasks']} ✗")
+        
+        if work_progress['total_tasks'] > 0:
+            completion_pct = (work_progress['completed_tasks'] / work_progress['total_tasks']) * 100
+            logger.info(f"  Progress: {completion_pct:.1f}%")
+        
+        # File Activity
+        if coord_summary.get('files_modified'):
+            logger.info("")
+            logger.info("📁 Recent File Activity:")
+            for file in coord_summary['files_modified'][-5:]:  # Last 5 files
+                logger.info(f"  • {file}")
+        
+        # Potential Issues
+        if coord_summary.get('conflicts', 0) > 0:
+            logger.info("")
+            logger.info(f"⚠️  Warning: {coord_summary['conflicts']} file conflicts detected")
+        
+        stale_claims = coord_summary.get('stale_claims', 0)
+        if stale_claims > 0:
+            logger.info(f"⚠️  Warning: {stale_claims} stale work claims")
+        
+        logger.info("=" * 60)
+    
+    def _get_status_icon(self, status: str) -> str:
+        """Get icon for agent status"""
+        icons = {
+            'working': '🔄',
+            'idle': '✅',
+            'error': '❌',
+            'stopped': '⏹️',
+            'starting': '🚀'
+        }
+        return icons.get(status.lower(), '❓')
+
+    def _format_uptime(self, seconds: float) -> str:
+        """Format uptime in human-readable format"""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        
+        if hours > 0:
+            return f"{hours}h {minutes}m"
+        elif minutes > 0:
+            return f"{minutes}m {secs}s"
+        else:
+            return f"{secs}s"
+
+    async def _calculate_work_progress(self, session: Session) -> Dict[str, int]:
+        """Calculate actual work progress from coordination data"""
+        
+        # Get all work items from the session
+        all_claims = self.coordination.get_all_claims(session.id)
+        completed_work = self.coordination.get_completed_work(session.id)
+        
+        # Get task registry for most accurate status
+        task_registry = self.coordination.get_task_registry(session.id)
+        
+        # Count by status from task registry (most accurate)
+        pending = 0
+        claimed = 0
+        in_progress = 0
+        completed = 0
+        failed = 0
+        
+        if task_registry:
+            pending = sum(1 for t in task_registry.values() if t.get('status') == 'pending')
+            claimed = sum(1 for t in task_registry.values() if t.get('status') == 'claimed')
+            in_progress = sum(1 for t in task_registry.values() if t.get('status') == 'in_progress')
+            completed = sum(1 for t in task_registry.values() if t.get('status') == 'completed')
+            failed = sum(1 for t in task_registry.values() if t.get('status') == 'failed')
+            total_tasks = len(task_registry)
+        else:
+            # Fallback to claims if no task registry
+            claimed = sum(1 for c in all_claims if c.get('status') == 'claimed')
+            in_progress = sum(1 for c in all_claims if c.get('status') == 'in_progress')
+            completed_from_claims = sum(1 for c in all_claims if c.get('status') == 'completed')
+            failed_from_claims = sum(1 for c in all_claims if c.get('status') == 'failed')
+            
+            # Also check completed work log
+            completed_from_log = len([w for w in completed_work if w.get('success', False)])
+            failed_from_log = len([w for w in completed_work if not w.get('success', False)])
+            
+            # Use the maximum of completed counts (claims vs log)
+            completed = max(completed_from_log, completed_from_claims)
+            failed = max(failed_from_log, failed_from_claims)
+            
+            # Get total tasks from the prompt
+            total_tasks = 0
+            if self.current_prompt and hasattr(self.current_prompt, 'steps'):
+                total_tasks = len(self.current_prompt.steps)
+            
+            # If we have claims but no prompt info, calculate from claims
+            if total_tasks == 0 and all_claims:
+                total_tasks = len(all_claims)
+        
+        # Also check strategy assignments if available
+        if hasattr(self.strategy, 'assignments') and self.strategy.assignments:
+            # Get counts from strategy assignments
+            strategy_total = len(self.strategy.assignments)
+            
+            # Use strategy total if task registry is empty
+            if not task_registry and strategy_total > 0:
+                total_tasks = max(total_tasks, strategy_total)
+        
+        return {
+            'total_tasks': total_tasks,
+            'pending_tasks': pending,
+            'claimed_tasks': claimed,
+            'in_progress_tasks': in_progress,
+            'completed_tasks': completed,
+            'failed_tasks': failed
+        }
     
     def interrupt(self):
         """Interrupt the sync session"""

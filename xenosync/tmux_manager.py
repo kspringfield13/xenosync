@@ -120,7 +120,7 @@ class TmuxManager:
             
             # Status bar configuration
             f"tmux set-option -t {self.session} -g status-style 'bg=colour235,fg=colour250'",
-            f"tmux set-option -t {self.session} -g status-left '[Builder] '",
+            f"tmux set-option -t {self.session} -g status-left '[Hive] '",
             f"tmux set-option -t {self.session} -g status-right 'Agents: {num_agents} | %H:%M'",
             
             # Window title format

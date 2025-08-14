@@ -158,6 +158,9 @@ class FileCoordinationManager:
         if not (path / 'planned_work_queue.json').exists():
             write_json_file(path / 'planned_work_queue.json', [])
         
+        if not (path / 'task_registry.json').exists():
+            write_json_file(path / 'task_registry.json', {})
+        
         return path
     
     def register_agent(self, agent_uid: str, agent_id: int, session_id: str,
@@ -508,8 +511,127 @@ class FileCoordinationManager:
         
         return cleaned
     
+    def register_tasks(self, session_id: str, tasks: List[Dict[str, Any]]) -> bool:
+        """Register all tasks for a session in the task registry"""
+        session_path = self.get_session_coordination_path(session_id)
+        registry_path = session_path / 'task_registry.json'
+        
+        def updater(data):
+            for task in tasks:
+                task_id = f"task_{task.get('number', 0)}"
+                data[task_id] = {
+                    'task_number': task.get('number'),
+                    'content': task.get('content', ''),
+                    'description': task.get('description', ''),
+                    'status': 'pending',
+                    'agent_id': None,
+                    'agent_uid': None,
+                    'claim_id': None,
+                    'created_at': datetime.now().isoformat(),
+                    'updated_at': datetime.now().isoformat()
+                }
+            return data
+        
+        update_json_file(registry_path, updater)
+        logger.info(f"Registered {len(tasks)} tasks for session {session_id}")
+        return True
+    
+    def update_task_status(self, session_id: str, task_number: int, status: str, 
+                          agent_uid: Optional[str] = None, claim_id: Optional[str] = None):
+        """Update the status of a task in the registry"""
+        session_path = self.get_session_coordination_path(session_id)
+        registry_path = session_path / 'task_registry.json'
+        
+        def updater(data):
+            task_id = f"task_{task_number}"
+            if task_id in data:
+                data[task_id]['status'] = status
+                data[task_id]['updated_at'] = datetime.now().isoformat()
+                if agent_uid:
+                    data[task_id]['agent_uid'] = agent_uid
+                if claim_id:
+                    data[task_id]['claim_id'] = claim_id
+            return data
+        
+        update_json_file(registry_path, updater)
+    
+    def get_task_registry(self, session_id: str) -> Dict[str, Any]:
+        """Get the complete task registry for a session"""
+        session_path = self.get_session_coordination_path(session_id)
+        registry_path = session_path / 'task_registry.json'
+        return read_json_file(registry_path, {})
+    
+    def get_all_claims(self, session_id: str) -> List[Dict[str, Any]]:
+        """Get all work claims for a session (active and completed)"""
+        session_path = self.get_session_coordination_path(session_id)
+        registry_path = session_path / 'active_work_registry.json'
+        
+        registry = read_json_file(registry_path, {})
+        return list(registry.values())
+    
+    def get_agent_current_work(self, agent_uid: str, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get the current work item for an agent"""
+        session_path = self.get_session_coordination_path(session_id)
+        registry_path = session_path / 'active_work_registry.json'
+        
+        registry = read_json_file(registry_path, {})
+        
+        for claim_id, claim_data in registry.items():
+            if (claim_data.get('agent_uid') == agent_uid and 
+                claim_data.get('status') in ['claimed', 'in_progress']):
+                return claim_data
+        
+        return None
+    
+    def complete_work(self, claim_id: str, agent_uid: str, session_id: str, 
+                      files_modified: List[str], success: bool = True, 
+                      error_message: Optional[str] = None) -> bool:
+        """Mark a work claim as completed and log it"""
+        session_path = self.get_session_coordination_path(session_id)
+        registry_path = session_path / 'active_work_registry.json'
+        
+        # Update claim status
+        claim_data = None
+        def updater(data):
+            nonlocal claim_data
+            if claim_id in data and data[claim_id]['agent_uid'] == agent_uid:
+                claim_data = data[claim_id]
+                data[claim_id]['status'] = 'completed' if success else 'failed'
+                data[claim_id]['updated_at'] = datetime.now().isoformat()
+                data[claim_id]['completed_at'] = datetime.now().isoformat()
+            return data
+        
+        update_json_file(registry_path, updater)
+        
+        if claim_data:
+            # Log to completed work
+            duration = None
+            if 'claimed_at' in claim_data:
+                claimed_at = datetime.fromisoformat(claim_data['claimed_at'])
+                duration = int((datetime.now() - claimed_at).total_seconds())
+            
+            self.log_completed_work(
+                agent_uid=agent_uid,
+                session_id=session_id,
+                description=claim_data.get('description', 'Unknown task'),
+                files_modified=files_modified,
+                duration_seconds=duration,
+                success=success,
+                error_message=error_message
+            )
+            
+            # Remove lock file
+            locks_dir = session_path / 'agent_locks'
+            lock_file = locks_dir / f"{claim_id}.lock"
+            if lock_file.exists():
+                lock_file.unlink()
+            
+            return True
+        
+        return False
+    
     def get_coordination_summary(self, session_id: str) -> Dict[str, Any]:
-        """Get coordination summary for a session"""
+        """Get enhanced coordination summary for a session"""
         session_path = self.get_session_coordination_path(session_id)
         
         # Read registry files
@@ -517,28 +639,49 @@ class FileCoordinationManager:
         completed_work = read_json_file(session_path / 'completed_work_log.json', [])
         agent_registry = read_json_file(session_path / 'agent_registry.json', {})
         
-        # Count active agents
-        active_agents = sum(1 for agent in agent_registry.values() 
-                          if agent.get('status') == 'active')
+        # Count agents by status
+        agents_by_status = {}
+        for agent in agent_registry.values():
+            status = agent.get('status', 'unknown')
+            agents_by_status[status] = agents_by_status.get(status, 0) + 1
         
-        # Count active claims
-        active_claims = sum(1 for claim in registry.values() 
-                          if claim.get('status') in ['claimed', 'in_progress'])
+        # Count claims by status
+        claims_by_status = {}
+        stale_claims = 0
+        for claim in registry.values():
+            status = claim.get('status', 'unknown')
+            claims_by_status[status] = claims_by_status.get(status, 0) + 1
+            
+            # Check for stale claims
+            if status in ['claimed', 'in_progress']:
+                updated_at = datetime.fromisoformat(claim['updated_at'])
+                if (datetime.now() - updated_at).total_seconds() > 3600:  # 1 hour
+                    stale_claims += 1
+        
+        # Get recently modified files
+        files_modified = set()
+        for work in completed_work[-20:]:  # Last 20 completed items
+            files_modified.update(work.get('files_modified', []))
         
         # Count completed work
         completed_count = len(completed_work)
         successful_count = sum(1 for work in completed_work if work.get('success'))
+        failed_count = completed_count - successful_count
         
-        # Count messages
-        messages_dir = session_path / 'agent_messages'
-        message_count = len(list(messages_dir.glob('*.json'))) if messages_dir.exists() else 0
+        # Calculate success rate
+        success_rate = (successful_count / completed_count * 100) if completed_count > 0 else 0
         
         return {
-            'active_agents': active_agents,
-            'active_claims': active_claims,
-            'completed_tasks': completed_count,
-            'successful_tasks': successful_count,
-            'messages_sent': message_count,
+            'agents_by_status': agents_by_status,
+            'active_agents': agents_by_status.get('active', 0),
+            'claims_by_status': claims_by_status,
+            'active_claims': claims_by_status.get('claimed', 0) + claims_by_status.get('in_progress', 0),
+            'stale_claims': stale_claims,
+            'completed_tasks': successful_count,
+            'failed_tasks': failed_count,
+            'total_completed': completed_count,
+            'success_rate': success_rate,
+            'files_modified': list(files_modified),
             'workload': self.get_agent_workload(session_id),
             'conflicts': len(self.detect_conflicts(session_id))
         }

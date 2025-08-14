@@ -3,94 +3,7 @@ description: Build a classic Pac-Man inspired arcade game with modern web techno
 
 initial_prompt: |
   You are building a Pac-Man style arcade game with authentic retro 8-bit aesthetics. This is a single-player maze navigation game where the player collects dots while avoiding ghosts.
-  
-  ## CRITICAL: Multi-Agent Coordination Protocol
 
-  ### Before Starting ANY Work:
-
-  **Important**: You are part of a coordinated multi-agent system. Use the `xenosync-coord` CLI tool to interact with the coordination system and avoid conflicts with other agents.
-
-  ### Essential Commands You Must Use:
-
-  #### 1. Check Coordination Status (Always do this first!)
-  ```bash
-  # See what other agents are doing and current session status
-  scripts/xenosync-coord status
-  ```
-
-  #### 2. Claim Work Before Starting
-  ```bash
-  # Claim specific files before modifying them
-  scripts/xenosync-coord claim "file1.html,file2.js,css/styles.css" "Implementing game UI and player controls"
-
-  # With priority and time estimate
-  scripts/xenosync-coord claim "game.js" "Building ghost AI system" --priority high --estimated-duration 30
-  ```
-
-  #### 3. Check Completed Work (Avoid duplication!)
-  ```bash
-  # See what has already been completed
-  scripts/xenosync-coord list-work
-  ```
-
-  #### 4. Report Completion (Required!)
-  ```bash
-  # When you finish work - MUST reference step numbers!
-  scripts/xenosync-coord complete "Completed step 1: Game framework and architecture ready" --files "index.html,game.js,styles.css" --duration 1200
-
-  # If work failed
-  scripts/xenosync-coord complete "Failed step 3: Player movement system" --failed --error "Collision detection issues"
-  ```
-
-  #### 5. Communicate with Team
-  ```bash
-  # Send messages to coordinate with other agents
-  scripts/xenosync-coord send-message all status_update "Starting work on maze generation system"
-  
-  # Get messages from other agents
-  scripts/xenosync-coord get-messages
-  ```
-
-  ### CRITICAL Work Flow:
-
-  1. **Start Each Work Session:**
-     ```bash
-     # Check what's happening
-     scripts/xenosync-coord status
-     scripts/xenosync-coord list-work
-     
-     # Claim your work area  
-     scripts/xenosync-coord claim "files,to,modify" "Description with step number"
-     ```
-
-  2. **During Work:**
-     - Focus on your claimed files only
-     - Never modify files claimed by other agents
-     - Check messages periodically: `scripts/xenosync-coord get-messages`
-
-  3. **Complete Work:**
-     ```bash
-     # MUST mention step numbers in completion message!
-     scripts/xenosync-coord complete "Completed step X: [Description]" --files "modified,files" --duration seconds
-     ```
-
-  ### Coordination Rules:
-  - **Always claim before coding** - prevents conflicts
-  - **Reference step numbers** in completion messages (e.g., "Completed step 3: Maze generation")
-  - **Check status frequently** - see what others are doing
-  - **Communicate blockers** - ask for help when stuck
-  - **Focus on integration** - ensure components work together
-
-  ### Step-Based Progress Tracking:
-  **IMPORTANT**: When completing work, explicitly mention which step(s) you completed:
-  - ✅ "Completed step 1: Game framework architecture"
-  - ✅ "Finished step 5: Ghost AI implementation" 
-  - ✅ "Done with step 8: Audio system integration"
-  - ❌ "Fixed some bugs" (too vague)
-  - ❌ "Updated files" (no step reference)
-
-  **Remember: We are a coordinated hive mind. Use the coordination tools, respect claims, communicate clearly, and reference step numbers when completing work. The orchestrator tracks progress by matching your completion messages to specific steps.**
-  
   The game should feature:
   - Classic maze gameplay with dot collection
   - Four unique ghosts with different AI behaviors
@@ -108,7 +21,16 @@ initial_prompt: |
   - LocalStorage for high scores and progress
   - Web Audio API for classic arcade sounds
   
-  Focus on creating an authentic arcade experience with smooth gameplay, intelligent ghost AI, and satisfying game feel.
+  TESTING PHILOSOPHY:
+  - Test early, test often - don't wait until the end to validate your work
+  - Every feature should be tested as soon as it's implemented
+  - Test in multiple browsers (Chrome, Firefox, Safari, Edge)
+  - Verify game mechanics work smoothly at 60fps
+  - Test edge cases: collision detection, maze boundaries, ghost transitions
+  - Validate user experience: controls feel responsive, game is fun to play
+  - Document any bugs found and ensure they're fixed before moving on
+  
+  Focus on creating an authentic arcade experience with smooth gameplay, intelligent ghost AI, and satisfying game feel. Remember: a working, thoroughly tested game is always better than an incomplete feature-rich one.
 
 metadata:
   recommended_agents: 3
@@ -162,6 +84,23 @@ steps:
       - High score tracking and display
       - Point popup animations
     
+  - content: Test core game mechanics and player experience
+    description: |
+      Comprehensive testing of implemented features:
+      - Verify Pac-Man movement in all directions
+      - Test collision detection with walls and maze boundaries
+      - Confirm dot collection works correctly and updates score
+      - Validate power pellet collection and scoring
+      - Test level completion when all dots are collected
+      - Verify score display updates in real-time
+      - Test high score saving and loading from LocalStorage
+      - Check game runs smoothly at 60fps in all target browsers
+      - Test keyboard responsiveness (arrow keys and WASD)
+      - Verify movement queuing works for smooth control
+      - Test death animation and respawn mechanics
+      - Document any performance issues or bugs found
+      - Fix all identified issues before proceeding to ghost AI
+    
   - content: Build ghost AI with unique behaviors
     description: |
       Implement the four classic ghost personalities:
@@ -186,6 +125,26 @@ steps:
       - Power-up duration decreases with level
       - Warning flash before power-up ends
       - Sound cues for power-up state
+    
+  - content: Integration testing of AI and game systems
+    description: |
+      Comprehensive testing of all game mechanics working together:
+      - Test all four ghost AI behaviors in various scenarios
+      - Verify ghost pathfinding works correctly in all maze areas
+      - Test power pellet activation and ghost state transitions
+      - Confirm ghost vulnerability timer works as expected
+      - Test eating ghosts and score multiplier progression (200→400→800→1600)
+      - Verify ghost eyes return to house correctly after being eaten
+      - Test ghost house exit logic and timing
+      - Confirm scatter/chase mode transitions work properly
+      - Test edge cases: player-ghost collisions, tunnel warping, maze corners
+      - Verify game performance with all AI running simultaneously
+      - Test level progression and ghost speed increases
+      - Confirm power pellet duration decreases with level advancement
+      - Test player death scenarios and life system
+      - Validate all game states work correctly (ready, playing, paused, game over)
+      - Document any AI behavior issues or performance problems
+      - Fix all identified issues before proceeding to visual effects
     
   - content: Develop visual effects and animations
     description: |
@@ -227,6 +186,27 @@ steps:
       - Instructions/how to play screen
       - Credits screen
     
+  - content: Final comprehensive testing and validation
+    description: |
+      Complete end-to-end testing of the finished game:
+      - Full gameplay testing: Complete multiple levels from start to finish
+      - Cross-browser compatibility testing (Chrome, Firefox, Safari, Edge)
+      - Performance testing: Confirm smooth 60fps gameplay on various devices
+      - User experience testing: Ensure controls feel responsive and intuitive
+      - Audio testing: Verify all sounds work correctly and enhance gameplay
+      - Visual testing: Confirm all animations and effects work as expected
+      - State management testing: Test all transitions (start→play→pause→game over)
+      - Persistence testing: Verify high scores save/load correctly
+      - Edge case testing: Tunnel warping, simultaneous collisions, rapid inputs
+      - Accessibility testing: Keyboard navigation, color contrast, screen readers
+      - Mobile device testing: Touch controls (if implemented), responsive design
+      - Load testing: Game startup performance, asset loading times
+      - Stress testing: Extended gameplay sessions, memory usage monitoring
+      - Bug regression testing: Verify all previously found issues are resolved
+      - Final quality assurance: Game is fun, balanced, and ready for release
+      - Document all test results, performance benchmarks, and known limitations
+      - Create troubleshooting guide based on testing findings
+    
   - content: Create comprehensive game documentation
     description: |
       Generate a detailed GAME_README.md file that includes:
@@ -234,7 +214,7 @@ steps:
       # Installation & Setup
       - Prerequisites and dependencies
       - How to download/clone the game
-      - Running locally (python -m http.server, live-server, etc.)
+      - Running locally (python3 -m http.server)
       - Browser compatibility notes
       
       # How to Play
@@ -260,6 +240,14 @@ steps:
       - AI algorithm details
       - Collision detection system
       
+      # Testing Results & Quality Assurance
+      - Browser compatibility matrix (tested versions)
+      - Performance benchmarks (fps, memory usage, load times)
+      - Known limitations and workarounds
+      - Test coverage summary for all game features
+      - User acceptance testing feedback
+      - Accessibility compliance status
+      
       # Enhancement Ideas
       - Add two-player mode
       - Create online leaderboards
@@ -272,9 +260,16 @@ steps:
       - Achievement system
       - Custom maze generator
       
-      # Troubleshooting
-      - Common issues and fixes
+      # Troubleshooting & Support
+      - Common issues and fixes (based on testing findings)
+      - Browser-specific compatibility issues
       - Performance optimization tips
       - Debug mode instructions
+      - Audio/video troubleshooting
+      - Input lag solutions
+      - Frame rate optimization
+      - Memory leak prevention
+      - Mobile device issues
+      - LocalStorage problems
       
       Make this documentation user-friendly and comprehensive!

@@ -44,18 +44,16 @@ def cli(ctx, config):
 @click.argument('prompt_file', required=False)
 @click.option('--agents', '-a', type=int, default=2, 
               help='Number of agents to run (2-20)')
-@click.option('--mode', '-m', type=click.Choice(['parallel', 'collaborative']), 
-              default='parallel', help='Execution mode: parallel (divide tasks) or collaborative (shared pool)')
+
 @click.option('--resume', '-r', type=str, help='Resume a previous session')
 @click.option('--dry-run', is_flag=True, help='Validate prompt without starting')
 @click.option('--no-terminal', is_flag=True, help='Disable automatic terminal opening')
 @click.pass_context
-def start(ctx, prompt_file, agents, mode, resume, dry_run, no_terminal):
+def start(ctx, prompt_file, agents, resume, dry_run, no_terminal):
     """Start a new multi-agent sync session
     
-    Xenosync orchestrates multiple AI agents to work on tasks either in:
-    - PARALLEL mode: Tasks are divided among agents upfront
-    - COLLABORATIVE mode: Agents claim tasks dynamically from a shared pool
+    Xenosync orchestrates multiple AI agents to work on tasks in parallel.
+    Tasks are divided among agents upfront for efficient execution.
     """
     config = ctx.obj['config']
     
@@ -71,7 +69,6 @@ def start(ctx, prompt_file, agents, mode, resume, dry_run, no_terminal):
     
     # Store settings in config
     config.set('num_agents', agents)
-    config.set('execution_mode', mode)
     config.set('auto_open_terminal', not no_terminal)
     
     # Initialize managers
@@ -109,7 +106,6 @@ def start(ctx, prompt_file, agents, mode, resume, dry_run, no_terminal):
         click.echo(f"Project: {prompt.name}")
         click.echo(f"Steps: {len(prompt.steps)}")
         click.echo(f"Agents: {agents}")
-        click.echo(f"Mode: {mode}")
         
         # Start orchestrator
         orchestrator = XenosyncOrchestrator(config, session_manager, prompt_manager)

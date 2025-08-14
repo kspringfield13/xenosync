@@ -54,7 +54,6 @@ class Config:
             
             # Multi-agent settings
             'num_agents': 2,  # Default number of agents (minimum 2)
-            'execution_mode': 'parallel',  # parallel or collaborative
             'agent_launch_delay': 3,  # Seconds between agent launches
             
             # Tmux settings
