@@ -256,6 +256,7 @@ def get_current_branch(cwd: Optional[Path] = None) -> str:
 
 
 def get_branch_commits(branch: str, limit: int = 10, 
+                      since_commit: Optional[str] = None,
                       cwd: Optional[Path] = None) -> List[CommitInfo]:
     """
     Get recent commits from a branch
@@ -263,14 +264,21 @@ def get_branch_commits(branch: str, limit: int = 10,
     Args:
         branch: Branch name
         limit: Maximum number of commits to return
+        since_commit: Only get commits after this commit hash
         cwd: Working directory
         
     Returns:
         List of CommitInfo objects
     """
     # Get commit logs with file changes
+    if since_commit:
+        # Get commits since baseline: since_commit..branch
+        commit_range = f'{since_commit}..{branch}'
+    else:
+        commit_range = branch
+    
     args = [
-        'log', branch,
+        'log', commit_range,
         f'--max-count={limit}',
         '--pretty=format:%H|%an|%ai|%s',
         '--name-only'

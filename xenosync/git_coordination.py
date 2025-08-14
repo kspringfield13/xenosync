@@ -47,6 +47,7 @@ class AgentTask:
     commit_count: int = 0
     files_modified: List[str] = None
     merge_commit: Optional[str] = None
+    baseline_commit: Optional[str] = None  # Track starting commit for accurate counting
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -227,6 +228,9 @@ class GitWorktreeCoordinator:
             # Create and checkout task branch
             create_branch(task_branch, base_branch=agent_wt.base_branch, cwd=cwd)
             
+            # Get current commit as baseline
+            baseline_commit = run_git_command(['rev-parse', 'HEAD'], cwd=cwd)[0].strip()
+            
             # Create task object
             task = AgentTask(
                 task_number=task_number,
@@ -236,7 +240,8 @@ class GitWorktreeCoordinator:
                 description=task_description,
                 status=TaskStatus.ASSIGNED,
                 assigned_at=datetime.now(),
-                files_modified=[]
+                files_modified=[],
+                baseline_commit=baseline_commit
             )
             
             agent_wt.tasks.append(task)
@@ -285,15 +290,16 @@ class GitWorktreeCoordinator:
         # Get git status in worktree
         status = get_status(cwd=agent_wt.worktree_path)
         
-        # Get recent commits on task branch
+        # Get commits made since task was assigned (only agent's work)
         commits = get_branch_commits(
             current_task.branch_name,
-            limit=10,
+            limit=100,  # Get all new commits
+            since_commit=current_task.baseline_commit,
             cwd=agent_wt.worktree_path
         )
         
         # Update task status based on activity
-        if commits and len(commits) > 1:  # More than initial commit
+        if commits:  # Any commits since baseline = agent is working
             current_task.status = TaskStatus.IN_PROGRESS
             current_task.commit_count = len(commits)
             

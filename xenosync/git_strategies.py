@@ -199,10 +199,16 @@ Begin with task {tasks[0].number}.
                     status_summary.append(f"Agent {agent_id}: Completed")
                 elif progress['status'] in ['assigned', 'in_progress']:
                     all_complete = False
-                    status_summary.append(
-                        f"Agent {agent_id}: Task {progress.get('task_number', '?')} "
-                        f"({progress.get('commits', 0)} commits)"
-                    )
+                    task_num = progress.get('task_number', '?')
+                    commit_count = progress.get('commits', 0)
+                    
+                    # Show actual agent commits (not inherited history)
+                    if commit_count > 0:
+                        status_summary.append(
+                            f"Agent {agent_id}: Task {task_num} ({commit_count} commit{'s' if commit_count != 1 else ''})"
+                        )
+                    else:
+                        status_summary.append(f"Agent {agent_id}: Task {task_num} (working)")
                 else:
                     status_summary.append(f"Agent {agent_id}: {progress['status']}")
             
