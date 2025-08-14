@@ -299,10 +299,21 @@ def get_branch_commits(branch: str, limit: int = 10,
             # Parse new commit
             parts = line.split('|')
             if len(parts) >= 4:
+                # Parse git date format: "2025-08-14 10:13:16 -0400"
+                # Convert to ISO format: "2025-08-14T10:13:16-04:00"
+                date_str = parts[2]
+                # Replace first space with T and fix timezone format
+                if ' ' in date_str:
+                    date_part, tz_part = date_str.rsplit(' ', 1)
+                    if len(tz_part) == 5 and (tz_part[0] == '+' or tz_part[0] == '-'):
+                        # Add colon to timezone: -0400 -> -04:00
+                        tz_part = tz_part[:3] + ':' + tz_part[3:]
+                    date_str = date_part + tz_part
+                
                 current_commit = CommitInfo(
                     hash=parts[0],
                     author=parts[1],
-                    date=datetime.fromisoformat(parts[2].replace(' ', 'T')),
+                    date=datetime.fromisoformat(date_str.replace(' ', 'T')),
                     message=parts[3],
                     files_changed=[]
                 )
