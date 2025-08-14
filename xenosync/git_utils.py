@@ -1,5 +1,37 @@
 """
-Git utilities for worktree-based coordination
+Module: git_utils
+Purpose: Git command wrappers and utilities for version control operations
+
+This module provides a comprehensive set of git operations used throughout Xenosync.
+It wraps git commands in Python functions with proper error handling and return
+type consistency. Used primarily for managing project repositories.
+
+Key Classes:
+    - WorktreeInfo: Git worktree information
+    - CommitInfo: Git commit details
+    - ConflictInfo: Merge conflict information
+    - GitCommandError: Git operation exceptions
+
+Key Functions:
+    - run_git_command(): Execute git commands safely
+    - create_worktree(): Create new worktree
+    - create_branch(): Create git branch
+    - commit_changes(): Commit with message
+    - merge_branch(): Merge branches
+    - get_status(): Get repository status
+
+Dependencies:
+    - subprocess: Command execution
+    - pathlib: Path operations
+    - datetime: Timestamp parsing
+
+Usage:
+    result = run_git_command(['status', '--porcelain'], cwd=project_path)
+    commit_hash = commit_changes("Initial commit", cwd=project_path)
+    
+Author: Xenosync Team
+Created: 2024-08-14
+Modified: 2024-08-14
 """
 
 import subprocess

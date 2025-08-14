@@ -65,6 +65,43 @@ class Config:
             'agent_monitor_interval': 30,  # Check agents every 30 seconds
             'message_grace_period': 60,  # Wait 60 seconds after sending message
             'wait_check_interval': 5,  # Check interval when waiting for agents
+            
+            # Enhanced completion detection settings
+            'completion_verification_enabled': True,  # Enable proactive completion verification
+            'completion_verification_interval': 300,  # Send verification every 5 minutes
+            'completion_verification_message': (
+                "Please confirm if you have completed your assigned tasks. "
+                "Respond with 'COMPLETED' if finished, or describe what you're still working on."
+            ),
+            'verification_response_wait': 30,  # Wait 30 seconds for verification response
+            'verification_response_lines': 15,  # Lines of output to check for response
+            
+            # File activity monitoring settings
+            'file_activity_window': 15,  # Track file changes in last 15 minutes
+            'file_activity_timeout': 10,  # Consider no activity after 10 minutes
+            
+            # Completion confidence scoring weights (must sum to 1.0)
+            'completion_weight_patterns': 0.25,      # Pattern detection weight
+            'completion_weight_file_activity': 0.25, # File activity weight
+            'completion_weight_verification': 0.35,  # Semantic verification weight
+            'completion_weight_time': 0.15,          # Time factors weight
+            'completion_confidence_threshold': 0.7,  # Confidence needed for completion
+            
+            # Semantic completion patterns for detection
+            'semantic_completion_patterns': [
+                r'(task|work|implementation|project)\s+(completed|finished|done)',
+                r'(i have|i\'ve)\s+(completed|finished|done)',
+                r'(ready for|completed|finished).*review',
+                r'\bCOMPLETED\b',  # Direct response to verification
+                r'(all|everything)\s+(is\s+)?(done|finished|completed)',
+                r'(finished|completed|done)\s+(working|implementing|building)',
+            ],
+            
+            # Project completion timing and quality settings
+            'minimum_work_duration_minutes': 10,  # Don't allow completion until at least 10 minutes
+            'project_quality_threshold': 3,       # Minimum files per project for completion consideration
+            'require_completion_confidence': True, # Use enhanced completion detection instead of basic patterns
+            'project_substantial_work_threshold': 500,  # Minimum total characters in project files
         }
     
     def get(self, key: str, default: Any = None) -> Any:

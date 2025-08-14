@@ -1,5 +1,37 @@
 """
-Agent Manager - Simplified management of multiple Claude instances for parallel execution
+Module: agent_manager
+Purpose: Manages multiple Claude agent instances for parallel task execution
+
+This module handles the lifecycle of multiple Claude agents, including initialization,
+task assignment, status monitoring, error recovery, and shutdown. It provides the
+core agent pool management functionality for multi-agent coordination.
+
+Key Classes:
+    - AgentManager: Main manager for agent pool
+    - Agent: Individual agent instance tracking
+    - AgentStatus: Agent state enumeration
+
+Key Functions:
+    - initialize_agents(): Create and start agent instances
+    - send_to_agent(): Send messages to specific agents
+    - check_agent_working(): Detect if agent is actively working
+    - handle_error_recovery(): Recover from agent failures
+    - _monitor_agents(): Continuous agent monitoring loop
+
+Dependencies:
+    - claude_interface: Claude CLI wrapper
+    - config: Configuration management
+    - asyncio: Asynchronous operations
+    - datetime: Timestamp tracking
+
+Usage:
+    manager = AgentManager(config, num_agents=4)
+    await manager.initialize_agents(session_id)
+    await manager.send_to_agent(agent_id, message)
+    
+Author: Xenosync Team
+Created: 2024-08-14
+Modified: 2024-08-14
 """
 
 import asyncio
@@ -23,6 +55,7 @@ class AgentStatus(Enum):
     """Simplified agent status states"""
     STARTING = "starting"  # Agent is being initialized
     WORKING = "working"    # Agent is actively processing (detected by "...ing..." pattern)
+    COMPLETED = "completed" # Agent has completed all assigned tasks
     ERROR = "error"        # Agent has encountered an error that needs recovery
     STOPPED = "stopped"    # Agent has been shut down
 
@@ -48,10 +81,17 @@ class Agent:
     worktree_branch: Optional[str] = None
     current_task_branch: Optional[str] = None
     
+    # Enhanced completion detection fields
+    last_verification_time: Optional[datetime] = None
+    last_verification_score: float = 0.5
+    completion_confidence_history: list = field(default_factory=list)
+    last_file_activity_check: Optional[datetime] = None
+    completion_signals_log: list = field(default_factory=list)
+    
     @property
     def is_available(self) -> bool:
-        """Check if agent is available for work (not in error or stopped state)"""
-        return self.status not in [AgentStatus.ERROR, AgentStatus.STOPPED]
+        """Check if agent is available for work (not in error, stopped, or completed state)"""
+        return self.status not in [AgentStatus.ERROR, AgentStatus.STOPPED, AgentStatus.COMPLETED]
     
     @property
     def uptime(self) -> float:
@@ -160,28 +200,28 @@ class AgentManager:
             session_id=session_id
         )
         
-        # Create worktree for this agent if using git coordination
-        if self.coordination and hasattr(self.coordination, 'create_agent_worktree'):
+        # Create project workspace for this agent
+        if self.coordination and hasattr(self.coordination, 'create_agent_workspace'):
             try:
                 from pathlib import Path
-                worktree_path, branch_name = self.coordination.create_agent_worktree(
+                workspace_path, project_path = self.coordination.create_agent_workspace(
                     agent_id, uid, session_id
                 )
-                agent.worktree_path = str(worktree_path)
-                agent.worktree_branch = branch_name
-                logger.info(f"Created worktree for agent {agent_id} at {worktree_path}")
+                agent.worktree_path = str(project_path)  # For compatibility
+                agent.worktree_branch = None  # No branch in project mode
+                logger.info(f"Created project workspace for agent {agent_id} at {project_path}")
             except Exception as e:
-                logger.error(f"Failed to create worktree for agent {agent_id}: {e}")
-                # Continue without worktree for backward compatibility
+                logger.error(f"Failed to create project workspace for agent {agent_id}: {e}")
+                # Continue without workspace for backward compatibility
         
         # Create Claude interface
         interface = ClaudeInterface(self.config)
         self.interfaces[agent_id] = interface
         
-        # Set working directory if worktree exists
-        if agent.worktree_path:
+        # Set working directory to project folder
+        if agent.worktree_path:  # Using worktree_path for compatibility
             interface.working_directory = agent.worktree_path
-            logger.info(f"Agent {agent_id} will work in {agent.worktree_path}")
+            logger.info(f"Agent {agent_id} will work in project directory: {agent.worktree_path}")
         
         # If tmux manager is available, tell the interface to use a specific pane
         if self.tmux_manager:
@@ -191,8 +231,8 @@ class AgentManager:
         os.environ['XENOSYNC_SESSION_ID'] = session_id
         os.environ['XENOSYNC_AGENT_UID'] = uid
         if agent.worktree_path:
-            os.environ['XENOSYNC_WORKTREE_PATH'] = agent.worktree_path
-            os.environ['XENOSYNC_WORKTREE_BRANCH'] = agent.worktree_branch
+            os.environ['XENOSYNC_PROJECT_PATH'] = agent.worktree_path
+            # No branch in project mode
         
         # Start Claude session
         try:
@@ -309,24 +349,21 @@ class AgentManager:
                     return True
             return False
         
-        # Enhanced working patterns
-        working_patterns = [
-            r'\w+ing\.\.\.+',  # Standard *ing... patterns (Thinking..., Processing...)
-            r'(thinking|processing|analyzing|creating|writing|building|implementing|working|compiling|testing|debugging|planning|designing|coding|executing)[^\w]*\.\.\.+',
-            r'(in progress|working on|currently|please wait)',
-            r'(step \d+|task \d+|phase \d+)',  # Step/task indicators
-            r'\.\.\.+$',  # Lines ending with ...
-        ]
-        
         lines = output.strip().split('\n')
-        # Check last 10 non-empty lines for working patterns
+        # Check last 10 non-empty lines for patterns
         recent_lines = [line.strip() for line in lines if line.strip()][-10:]
         
-        for line in recent_lines:
-            for pattern in working_patterns:
-                if re.search(pattern, line, re.IGNORECASE):
-                    logger.debug(f"Agent {agent_id} working pattern found: '{line}' (matched: {pattern})")
-                    return True
+        # First check for completion patterns (takes precedence)
+        completion_result = self._check_completion_patterns(recent_lines)
+        if completion_result['has_completion_patterns']:
+            logger.debug(f"Agent {agent_id} completion patterns found, marking as not working")
+            return False
+        
+        # Then check for working patterns
+        working_result = self._check_working_patterns(recent_lines)
+        if working_result['has_working_patterns']:
+            logger.debug(f"Agent {agent_id} working pattern found: '{working_result['matched_line']}'")
+            return True
         
         # Grace period as final fallback only if no patterns found
         if agent.time_since_message():
@@ -338,6 +375,218 @@ class AgentManager:
         
         logger.debug(f"Agent {agent_id} shows no working patterns in recent output")
         return False
+    
+    def _check_working_patterns(self, lines: list) -> Dict[str, Any]:
+        """Check for working patterns in output lines"""
+        working_patterns = [
+            r'\w+ing\.\.\.+',  # Standard *ing... patterns (Thinking..., Processing...)
+            r'(thinking|processing|analyzing|creating|writing|building|implementing|working|compiling|testing|debugging|planning|designing|coding|executing)[^\w]*\.\.\.+',
+            r'(in progress|working on|currently|please wait)',
+            r'(step \d+|task \d+|phase \d+)',  # Step/task indicators
+            r'\.\.\.+$',  # Lines ending with ...
+        ]
+        
+        for line in lines:
+            for pattern in working_patterns:
+                if re.search(pattern, line, re.IGNORECASE):
+                    return {
+                        'has_working_patterns': True,
+                        'matched_line': line,
+                        'matched_pattern': pattern
+                    }
+        
+        return {'has_working_patterns': False, 'matched_line': '', 'matched_pattern': ''}
+    
+    def _check_completion_patterns(self, lines: list) -> Dict[str, Any]:
+        """Check for completion patterns in output lines"""
+        # Get completion patterns from config
+        completion_patterns = self.config.get('semantic_completion_patterns', [
+            r'(task|work|implementation|project)\s+(completed|finished|done)',
+            r'(i have|i\'ve)\s+(completed|finished|done)',
+            r'(ready for|completed|finished).*review',
+            r'\bCOMPLETED\b',  # Direct response to verification
+            r'(all|everything)\s+(is\s+)?(done|finished|completed)',
+            r'(finished|completed|done)\s+(working|implementing|building)',
+        ])
+        
+        for line in lines:
+            for pattern in completion_patterns:
+                if re.search(pattern, line, re.IGNORECASE):
+                    return {
+                        'has_completion_patterns': True,
+                        'matched_line': line,
+                        'matched_pattern': pattern
+                    }
+        
+        return {'has_completion_patterns': False, 'matched_line': '', 'matched_pattern': ''}
+    
+    async def calculate_completion_confidence(self, agent_id: int) -> Dict[str, Any]:
+        """
+        Calculate weighted confidence score for agent completion using multiple signals
+        
+        Returns:
+            Dict with:
+            - overall_confidence: float (0-1)
+            - completion_likely: bool
+            - signal_scores: Dict with individual signal scores
+            - signal_details: Dict with detailed information from each signal
+        """
+        agent = self.get_agent_by_id(agent_id)
+        if not agent:
+            return {
+                'overall_confidence': 0.0,
+                'completion_likely': False,
+                'signal_scores': {},
+                'signal_details': {}
+            }
+        
+        try:
+            # Get configuration weights
+            weights = {
+                'pattern_detection': self.config.get('completion_weight_patterns', 0.25),
+                'file_activity': self.config.get('completion_weight_file_activity', 0.25),
+                'semantic_verification': self.config.get('completion_weight_verification', 0.35),
+                'time_factors': self.config.get('completion_weight_time', 0.15)
+            }
+            
+            signal_scores = {}
+            signal_details = {}
+            
+            # Signal 1: Pattern Detection (enhanced check_agent_working)
+            is_working = await self.check_agent_working(agent_id)
+            pattern_score = 0.0 if is_working else 1.0  # If not working, likely completed
+            
+            signal_scores['pattern_detection'] = pattern_score
+            signal_details['pattern_detection'] = {
+                'is_working': is_working,
+                'description': 'Based on working/completion patterns in agent output'
+            }
+            
+            # Signal 2: File Activity
+            file_activity = await self.check_file_activity(agent_id)
+            file_score = 0.0 if file_activity['has_recent_activity'] else 1.0
+            
+            # Adjust file score based on how long since last activity
+            minutes_since = file_activity['minutes_since_activity']
+            timeout_minutes = self.config.get('file_activity_timeout', 10)
+            
+            if minutes_since != float('inf'):
+                # Gradual increase in confidence as time passes without activity
+                time_factor = min(1.0, minutes_since / timeout_minutes)
+                file_score = time_factor
+            
+            signal_scores['file_activity'] = file_score
+            signal_details['file_activity'] = {
+                'has_recent_activity': file_activity['has_recent_activity'],
+                'minutes_since_activity': minutes_since,
+                'active_files': file_activity['active_files'],
+                'description': f'No file changes for {minutes_since:.1f} minutes'
+            }
+            
+            # Signal 3: Semantic Verification (if enabled and not recently done)
+            verification_enabled = self.config.get('completion_verification_enabled', True)
+            verification_interval = self.config.get('completion_verification_interval', 300)  # 5 minutes
+            
+            verification_score = 0.5  # Default neutral score
+            verification_details = {'enabled': verification_enabled}
+            
+            if verification_enabled:
+                # Check if verification was done recently
+                last_verification = getattr(agent, 'last_verification_time', None)
+                current_time = datetime.now()
+                
+                should_verify = (
+                    last_verification is None or 
+                    (current_time - last_verification).total_seconds() > verification_interval
+                )
+                
+                if should_verify:
+                    logger.debug(f"Running completion verification for agent {agent_id}")
+                    verification_result = await self.verify_agent_completion(agent_id)
+                    
+                    if verification_result['verification_sent']:
+                        verification_score = verification_result['confidence_score']
+                        agent.last_verification_time = current_time  # Track when we last verified
+                        
+                        verification_details.update({
+                            'verification_sent': True,
+                            'completion_confirmed': verification_result['completion_confirmed'],
+                            'confidence_score': verification_score,
+                            'response_summary': verification_result['response_text'][:100] + '...' if len(verification_result['response_text']) > 100 else verification_result['response_text']
+                        })
+                    else:
+                        verification_details.update({
+                            'verification_sent': False,
+                            'error': verification_result['response_text']
+                        })
+                else:
+                    # Use previous verification result if recent
+                    verification_score = getattr(agent, 'last_verification_score', 0.5)
+                    time_since_verification = (current_time - last_verification).total_seconds() / 60
+                    verification_details.update({
+                        'verification_sent': False,
+                        'reason': f'Recent verification {time_since_verification:.1f}m ago',
+                        'last_score': verification_score
+                    })
+            
+            signal_scores['semantic_verification'] = verification_score
+            signal_details['semantic_verification'] = verification_details
+            
+            # Signal 4: Time Factors
+            time_score = 0.5  # Default neutral
+            
+            # Consider how long agent has been working on current task
+            if agent.current_task_start_time:
+                task_duration_minutes = agent.get_task_elapsed_time() / 60
+                minimum_duration = self.config.get('task_minimum_duration', 300) / 60  # Convert to minutes
+                
+                if task_duration_minutes > minimum_duration:
+                    # Increase confidence over time (but cap at reasonable limit)
+                    time_factor = min(1.0, (task_duration_minutes - minimum_duration) / minimum_duration)
+                    time_score = 0.5 + (time_factor * 0.5)  # Range: 0.5 to 1.0
+            
+            signal_scores['time_factors'] = time_score
+            signal_details['time_factors'] = {
+                'task_duration_minutes': task_duration_minutes if agent.current_task_start_time else 0,
+                'description': f'Task running for {task_duration_minutes:.1f} minutes' if agent.current_task_start_time else 'No active task timing'
+            }
+            
+            # Calculate weighted overall confidence
+            overall_confidence = (
+                signal_scores['pattern_detection'] * weights['pattern_detection'] +
+                signal_scores['file_activity'] * weights['file_activity'] +
+                signal_scores['semantic_verification'] * weights['semantic_verification'] +
+                signal_scores['time_factors'] * weights['time_factors']
+            )
+            
+            # Determine if completion is likely
+            confidence_threshold = self.config.get('completion_confidence_threshold', 0.7)
+            completion_likely = overall_confidence >= confidence_threshold
+            
+            logger.debug(f"Agent {agent_id} completion confidence: {overall_confidence:.3f} "
+                        f"(pattern: {signal_scores['pattern_detection']:.2f}, "
+                        f"file: {signal_scores['file_activity']:.2f}, "
+                        f"verification: {signal_scores['semantic_verification']:.2f}, "
+                        f"time: {signal_scores['time_factors']:.2f}) -> "
+                        f"{'COMPLETED' if completion_likely else 'WORKING'}")
+            
+            return {
+                'overall_confidence': overall_confidence,
+                'completion_likely': completion_likely,
+                'signal_scores': signal_scores,
+                'signal_details': signal_details,
+                'weights_used': weights,
+                'threshold': confidence_threshold
+            }
+            
+        except Exception as e:
+            logger.error(f"Error calculating completion confidence for agent {agent_id}: {e}")
+            return {
+                'overall_confidence': 0.0,
+                'completion_likely': False,
+                'signal_scores': {},
+                'signal_details': {'error': str(e)}
+            }
     
     async def has_error_pattern(self, agent_id: int) -> bool:
         """Check if agent output contains error patterns"""
@@ -357,6 +606,236 @@ class AgentManager:
         
         output_lower = output.lower()
         return any(pattern in output_lower for pattern in error_patterns)
+    
+    async def check_file_activity(self, agent_id: int) -> Dict[str, Any]:
+        """
+        Check file activity in agent's project directory
+        
+        Returns:
+            Dict with activity information:
+            - has_recent_activity: bool
+            - last_activity_time: datetime or None
+            - minutes_since_activity: float
+            - active_files: int (files modified in last period)
+        """
+        agent = self.get_agent_by_id(agent_id)
+        if not agent or not agent.worktree_path:
+            return {
+                'has_recent_activity': False,
+                'last_activity_time': None,
+                'minutes_since_activity': float('inf'),
+                'active_files': 0
+            }
+        
+        try:
+            from pathlib import Path
+            import time
+            
+            project_path = Path(agent.worktree_path)
+            if not project_path.exists():
+                return {
+                    'has_recent_activity': False,
+                    'last_activity_time': None,
+                    'minutes_since_activity': float('inf'),
+                    'active_files': 0
+                }
+            
+            # Configuration
+            activity_window_minutes = self.config.get('file_activity_window', 15)  # 15 minutes default
+            activity_timeout_minutes = self.config.get('file_activity_timeout', 10)  # 10 minutes default
+            
+            current_time = time.time()
+            activity_window_seconds = activity_window_minutes * 60
+            activity_timeout_seconds = activity_timeout_minutes * 60
+            
+            last_activity_time = None
+            active_files_count = 0
+            
+            # Check all files in project directory (excluding .git)
+            for file_path in project_path.rglob('*'):
+                if file_path.is_file() and '.git' not in str(file_path):
+                    try:
+                        mtime = file_path.stat().st_mtime
+                        
+                        # Count files modified in activity window
+                        if current_time - mtime <= activity_window_seconds:
+                            active_files_count += 1
+                        
+                        # Track most recent modification
+                        if last_activity_time is None or mtime > last_activity_time:
+                            last_activity_time = mtime
+                            
+                    except (OSError, IOError):
+                        continue  # Skip files we can't access
+            
+            # Calculate time since last activity
+            if last_activity_time:
+                minutes_since_activity = (current_time - last_activity_time) / 60
+                has_recent_activity = minutes_since_activity <= activity_timeout_minutes
+                activity_datetime = datetime.fromtimestamp(last_activity_time)
+            else:
+                minutes_since_activity = float('inf')
+                has_recent_activity = False
+                activity_datetime = None
+            
+            logger.debug(f"Agent {agent_id} file activity: {active_files_count} active files, "
+                        f"{minutes_since_activity:.1f}m since last change")
+            
+            return {
+                'has_recent_activity': has_recent_activity,
+                'last_activity_time': activity_datetime,
+                'minutes_since_activity': minutes_since_activity,
+                'active_files': active_files_count
+            }
+            
+        except Exception as e:
+            logger.error(f"Error checking file activity for agent {agent_id}: {e}")
+            return {
+                'has_recent_activity': False,
+                'last_activity_time': None,
+                'minutes_since_activity': float('inf'),
+                'active_files': 0
+            }
+    
+    async def verify_agent_completion(self, agent_id: int) -> Dict[str, Any]:
+        """
+        Send verification message to agent and parse response for completion confirmation
+        
+        Returns:
+            Dict with verification results:
+            - verification_sent: bool
+            - completion_confirmed: bool  
+            - confidence_score: float (0-1)
+            - response_text: str
+        """
+        agent = self.get_agent_by_id(agent_id)
+        if not agent:
+            return {
+                'verification_sent': False,
+                'completion_confirmed': False,
+                'confidence_score': 0.0,
+                'response_text': ''
+            }
+        
+        try:
+            # Get verification message from config
+            verification_message = self.config.get(
+                'completion_verification_message',
+                "Please confirm if you have completed your assigned tasks. "
+                "Respond with 'COMPLETED' if finished, or describe what you're still working on."
+            )
+            
+            # Send verification message
+            success = await self.send_to_agent(agent_id, verification_message)
+            if not success:
+                return {
+                    'verification_sent': False,
+                    'completion_confirmed': False,
+                    'confidence_score': 0.0,
+                    'response_text': 'Failed to send verification message'
+                }
+            
+            # Wait for response
+            response_wait_time = self.config.get('verification_response_wait', 30)  # 30 seconds
+            await asyncio.sleep(response_wait_time)
+            
+            # Get recent output to parse response
+            response_lines = self.config.get('verification_response_lines', 15)
+            output = await self.get_agent_output(agent_id, lines=response_lines)
+            
+            if not output:
+                return {
+                    'verification_sent': True,
+                    'completion_confirmed': False,
+                    'confidence_score': 0.0,
+                    'response_text': 'No response received'
+                }
+            
+            # Parse response for completion indicators
+            completion_result = self._parse_completion_response(output)
+            
+            logger.debug(f"Agent {agent_id} verification result: "
+                        f"confirmed={completion_result['completion_confirmed']}, "
+                        f"confidence={completion_result['confidence_score']:.2f}")
+            
+            return {
+                'verification_sent': True,
+                'completion_confirmed': completion_result['completion_confirmed'],
+                'confidence_score': completion_result['confidence_score'],
+                'response_text': output[-500:] if len(output) > 500 else output  # Last 500 chars
+            }
+            
+        except Exception as e:
+            logger.error(f"Error during agent {agent_id} completion verification: {e}")
+            return {
+                'verification_sent': False,
+                'completion_confirmed': False,
+                'confidence_score': 0.0,
+                'response_text': f'Verification error: {str(e)}'
+            }
+    
+    def _parse_completion_response(self, response_text: str) -> Dict[str, Any]:
+        """
+        Parse agent response for completion indicators
+        
+        Returns:
+            Dict with:
+            - completion_confirmed: bool
+            - confidence_score: float (0-1)
+        """
+        if not response_text:
+            return {'completion_confirmed': False, 'confidence_score': 0.0}
+        
+        response_lower = response_text.lower()
+        confidence_score = 0.0
+        completion_confirmed = False
+        
+        # Get completion patterns from config
+        completion_patterns = self.config.get('semantic_completion_patterns', [
+            r'(task|work|implementation|project)\s+(completed|finished|done)',
+            r'(i have|i\'ve)\s+(completed|finished|done)',
+            r'(ready for|completed|finished).*review',
+            r'\bCOMPLETED\b',  # Direct response to verification
+            r'(all|everything)\s+(is\s+)?(done|finished|completed)',
+            r'(finished|completed|done)\s+(working|implementing|building)',
+        ])
+        
+        # Check for explicit completion patterns
+        for pattern in completion_patterns:
+            matches = re.findall(pattern, response_lower, re.IGNORECASE)
+            if matches:
+                confidence_score += 0.3  # Each pattern adds confidence
+                completion_confirmed = True
+                logger.debug(f"Completion pattern matched: {pattern} -> {matches}")
+        
+        # Check for negative indicators (still working)
+        working_indicators = [
+            r'(still|currently|now)\s+(working|implementing|building)',
+            r'(in progress|working on|not.*done|not.*finished)',
+            r'(need to|have to|going to)\s+(finish|complete|implement)',
+            r'(almost|nearly|close to)\s+(done|finished|completed)',
+        ]
+        
+        for pattern in working_indicators:
+            if re.search(pattern, response_lower, re.IGNORECASE):
+                confidence_score -= 0.4  # Negative indicators reduce confidence
+                completion_confirmed = False
+                logger.debug(f"Working indicator found: {pattern}")
+        
+        # Direct completion confirmations get highest confidence
+        direct_confirmations = ['completed', 'finished', 'done', 'ready']
+        for confirmation in direct_confirmations:
+            if f" {confirmation}" in response_lower or response_lower.startswith(confirmation):
+                confidence_score += 0.4
+                completion_confirmed = True
+        
+        # Normalize confidence score
+        confidence_score = max(0.0, min(1.0, confidence_score))
+        
+        return {
+            'completion_confirmed': completion_confirmed,
+            'confidence_score': confidence_score
+        }
     
     async def handle_error_recovery(self, agent_id: int) -> bool:
         """Handle error detection and recovery with exponential backoff"""
@@ -425,99 +904,80 @@ class AgentManager:
                                 elapsed = agent.get_task_elapsed_time()
                                 logger.debug(f"Checking agent {agent.id} completion after {elapsed:.1f}s (task {agent.current_task_number})")
                                 
-                                # Check if agent is actually done using enhanced pattern detection
-                                is_working = await self.check_agent_working(agent.id)
+                                # Use enhanced completion detection with multiple signals
+                                logger.debug(f"Running enhanced completion detection for agent {agent.id}")
+                                completion_analysis = await self.calculate_completion_confidence(agent.id)
                                 
-                                if is_working:
-                                    logger.info(f"Agent {agent.id} still working on task {agent.current_task_number} after {elapsed:.1f}s (patterns detected)")
-                                elif not is_working:
-                                    # Double-check with additional pattern verification
-                                    logger.info(f"Agent {agent.id} appears idle, performing double-check for working patterns")
+                                # Log confidence details
+                                confidence = completion_analysis['overall_confidence']
+                                completion_likely = completion_analysis['completion_likely']
+                                
+                                logger.info(f"Agent {agent.id} completion analysis: "
+                                          f"confidence={confidence:.3f}, "
+                                          f"likely_complete={completion_likely}")
+                                
+                                # Store confidence history
+                                agent.completion_confidence_history.append({
+                                    'timestamp': datetime.now(),
+                                    'confidence': confidence,
+                                    'completion_likely': completion_likely,
+                                    'signal_scores': completion_analysis['signal_scores']
+                                })
+                                
+                                # Keep only last 10 entries
+                                if len(agent.completion_confidence_history) > 10:
+                                    agent.completion_confidence_history = agent.completion_confidence_history[-10:]
+                                
+                                if not completion_likely:
+                                    # Agent is still working
+                                    logger.info(f"Agent {agent.id} still working on task {agent.current_task_number} "
+                                              f"after {elapsed:.1f}s (confidence: {confidence:.3f})")
+                                    continue
+                                
+                                # Check for errors before marking complete
+                                if await self.has_error_pattern(agent.id):
+                                    logger.warning(f"Agent {agent.id} has error pattern, attempting recovery")
+                                    await self.handle_error_recovery(agent.id)
+                                else:
+                                    # Task completed with high confidence
+                                    logger.info(f"Agent {agent.id} completed task {agent.current_task_number} "
+                                              f"after {elapsed:.1f}s (confidence: {confidence:.3f})")
                                     
-                                    # Get more recent output for thorough check
-                                    output = await self.get_agent_output(agent.id, lines=30)
-                                    still_working = False
-                                    
-                                    if output:
-                                        # Look for any "*ing..." patterns in recent output
-                                        recent_lines = output.split('\n')[-15:]  # Last 15 lines
-                                        for line in recent_lines:
-                                            if re.search(r'\w+ing\.\.\.+', line.strip(), re.IGNORECASE):
-                                                logger.info(f"Agent {agent.id} still shows working patterns: '{line.strip()}'")
-                                                still_working = True
-                                                break
-                                    
-                                    if still_working:
-                                        logger.info(f"Agent {agent.id} kept working due to detected patterns after {elapsed:.1f}s")
-                                        continue  # Don't mark as complete, continue monitoring
-                                    
-                                    # Check for errors
-                                    if await self.has_error_pattern(agent.id):
-                                        logger.warning(f"Agent {agent.id} has error pattern, attempting recovery")
-                                        await self.handle_error_recovery(agent.id)
-                                    else:
-                                        # Task actually completed
-                                        logger.info(f"Agent {agent.id} confirmed completed task {agent.current_task_number} after {elapsed:.1f}s (no working patterns found)")
+                                    # Process task completion
+                                    if self.coordination:
+                                        session_id = agent.session_id
                                         
-                                        # Process task completion
-                                        if self.coordination:
-                                            session_id = agent.session_id
-                                            
-                                            # Get all current work for this agent
-                                            all_claims = self.coordination.get_all_claims(session_id)
-                                            agent_claims = [c for c in all_claims 
-                                                          if c.get('agent_uid') == agent.uid 
-                                                          and c.get('status') == 'in_progress']
-                                            
-                                            if agent_claims:
-                                                # Try to detect files modified from recent output
-                                                files_modified = await self._detect_modified_files(agent.id)
-                                                
-                                                # Mark all agent's work as completed
-                                                for claim in agent_claims:
-                                                    # Complete the work claim
-                                                    self.coordination.complete_work(
-                                                        claim_id=claim['id'],
-                                                        agent_uid=agent.uid,
-                                                        session_id=session_id,
-                                                        files_modified=files_modified,
-                                                        success=True  # Assume success if no error pattern
-                                                    )
-                                                    
-                                                    # Update task registry if task_number is in metadata
-                                                    metadata = claim.get('metadata', {})
-                                                    task_number = metadata.get('task_number')
-                                                    if task_number:
-                                                        self.coordination.update_task_status(
-                                                            session_id=session_id,
-                                                            task_number=task_number,
-                                                            status='completed'
-                                                        )
-                                                    
-                                                    logger.info(f"Agent {agent.id} completed: {claim.get('description', 'Unknown')[:50]}")
-                                                
-                                                logger.info(f"Agent {agent.id} completed {len(agent_claims)} task(s)")
-                                                
-                                                # Clear current task info
-                                                agent.current_task_number = None
-                                                agent.current_task_start_time = None
-                                                
-                                                # Trigger next task delivery if strategy is available
-                                                if self.strategy and hasattr(self.strategy, 'send_next_task_to_agent'):
-                                                    logger.info(f"Requesting next task for agent {agent.id}")
-                                                    try:
-                                                        # Send next task from the agent's queue
-                                                        next_task_sent = await self.strategy.send_next_task_to_agent(
-                                                            agent.id, session_id
-                                                        )
-                                                        if next_task_sent:
-                                                            logger.info(f"Next task sent to agent {agent.id}")
-                                                            # Agent is now working on the next task
-                                                            agent.status = AgentStatus.WORKING
-                                                        else:
-                                                            logger.info(f"No more tasks for agent {agent.id}")
-                                                    except Exception as e:
-                                                        logger.error(f"Error sending next task to agent {agent.id}: {e}")
+                                        # Mark agent project as complete if using project coordination
+                                        if hasattr(self.coordination, 'complete_agent_project'):
+                                            try:
+                                                self.coordination.complete_agent_project(agent.id)
+                                                agent.status = AgentStatus.COMPLETED  # Mark agent as completed
+                                                logger.info(f"Agent {agent.id} project marked as complete and agent status set to COMPLETED")
+                                            except Exception as e:
+                                                logger.error(f"Failed to mark agent {agent.id} project complete: {e}")
+                                        
+                                        logger.info(f"Agent {agent.id} completed task {agent.current_task_number}")
+                                        
+                                        # Clear current task info
+                                        agent.current_task_number = None
+                                        agent.current_task_start_time = None
+                                        
+                                        # Trigger next task delivery if strategy is available
+                                        if self.strategy and hasattr(self.strategy, 'send_next_task_to_agent'):
+                                            logger.info(f"Requesting next task for agent {agent.id}")
+                                            try:
+                                                # Send next task from the agent's queue
+                                                next_task_sent = await self.strategy.send_next_task_to_agent(
+                                                    agent.id, session_id
+                                                )
+                                                if next_task_sent:
+                                                    logger.info(f"Next task sent to agent {agent.id}")
+                                                    # Agent is now working on the next task
+                                                    agent.status = AgentStatus.WORKING
+                                                else:
+                                                    logger.info(f"No more tasks for agent {agent.id}")
+                                            except Exception as e:
+                                                logger.error(f"Error sending next task to agent {agent.id}: {e}")
                         else:
                             # Task still in minimum duration period
                             if agent.current_task_start_time:

@@ -1,9 +1,39 @@
 #!/usr/bin/env python3
 """
-Xenosync - Unified Alien Synchronization Platform
+Module: cli
+Purpose: Command-line interface entry point for Xenosync multi-agent orchestration
 
-A simplified, powerful system for managing sequential Claude sessions
-to execute complex, multi-step synchronization processes.
+This module provides the main CLI commands for interacting with Xenosync. It handles
+command parsing, session management, configuration loading, and orchestration startup.
+Supports both single and multi-agent modes with tmux visualization.
+
+Key Classes:
+    - XenosyncCLI: Main CLI application class
+
+Key Functions:
+    - cli(): Main CLI group
+    - start(): Start a new multi-agent session
+    - status(): Show active sessions
+    - kill(): Terminate a session
+    - attach(): Attach to tmux session
+    - validate(): Validate configuration and prompts
+
+Dependencies:
+    - click: CLI framework
+    - asyncio: Async execution
+    - rich: Terminal formatting
+    - orchestrator: Main execution engine
+    - file_session_manager: Session persistence
+
+Usage:
+    xenosync start prompt.yaml --agents 4
+    xenosync status
+    xenosync attach --hive
+    xenosync kill <session-id>
+    
+Author: Xenosync Team
+Created: 2024-08-14
+Modified: 2024-08-14
 """
 
 import asyncio

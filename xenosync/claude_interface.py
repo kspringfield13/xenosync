@@ -1,5 +1,36 @@
 """
-Claude CLI interface wrapper with async support
+Module: claude_interface
+Purpose: Asynchronous wrapper for Claude CLI interactions
+
+This module provides an interface to interact with Claude through the command-line
+interface. It supports both direct process management and tmux-based sessions,
+enabling multiple Claude instances to run in parallel with proper isolation.
+
+Key Classes:
+    - ClaudeInterface: Main interface for Claude CLI interaction
+
+Key Functions:
+    - start(): Initialize Claude session
+    - send_message(): Send input to Claude
+    - get_recent_output(): Retrieve Claude's output
+    - _start_in_tmux_pane(): Start Claude in tmux pane
+    - _start_direct_session(): Start Claude as subprocess
+
+Dependencies:
+    - asyncio: Asynchronous subprocess management
+    - tmux: Terminal multiplexer (optional)
+    - pathlib: Path operations
+    - subprocess: Process execution
+
+Usage:
+    interface = ClaudeInterface(config)
+    interface.working_directory = '/path/to/project'
+    await interface.start(session_id, agent_uid)
+    await interface.send_message("Hello Claude")
+    
+Author: Xenosync Team
+Created: 2024-08-14
+Modified: 2024-08-14
 """
 
 import asyncio
@@ -100,6 +131,21 @@ class ClaudeInterface:
         # Target pane in shared session
         target_pane = f"{self.tmux_shared_session}:agents.{self.tmux_pane_id}"
         
+        # Change to working directory first if specified
+        if self.working_directory:
+            # Validate directory exists
+            if Path(self.working_directory).exists():
+                cd_cmd = f"cd '{self.working_directory}'"
+                await self._run_command([
+                    'tmux', 'send-keys', '-t', target_pane,
+                    cd_cmd, 'Enter'
+                ])
+                # Small delay to ensure cd completes
+                await asyncio.sleep(0.5)
+                logger.debug(f"Changed to working directory: {self.working_directory}")
+            else:
+                logger.warning(f"Working directory does not exist: {self.working_directory}")
+        
         # Set environment variables for coordination in the tmux session itself
         if self.agent_uid:
             # Set environment variables at session level first
@@ -120,6 +166,10 @@ class ClaudeInterface:
                 f"export XENOSYNC_PROJECT_ROOT='{Path(__file__).parent.parent}'",
                 "echo 'Coordination environment set up for agent'"
             ]
+            
+            # Add working directory to environment if set
+            if self.working_directory:
+                pane_env_cmds.insert(2, f"export XENOSYNC_WORKTREE_PATH='{self.working_directory}'")
             
             for env_cmd in pane_env_cmds:
                 await self._run_command([
@@ -175,10 +225,25 @@ class ClaudeInterface:
         ]
         await self._run_command(new_window_cmd)
         
+        # Change to working directory if specified
+        if self.working_directory:
+            # Validate directory exists
+            if Path(self.working_directory).exists():
+                cd_cmd = f"cd '{self.working_directory}'"
+                await self._run_command([
+                    'tmux', 'send-keys', '-t', f"{self.tmux_session}:Claude",
+                    cd_cmd, 'Enter'
+                ])
+                # Small delay to ensure cd completes
+                await asyncio.sleep(0.5)
+                logger.debug(f"Changed to working directory: {self.working_directory}")
+            else:
+                logger.warning(f"Working directory does not exist: {self.working_directory}")
+        
         # Start Claude in the window
         claude_cmd = ' '.join(self.config.claude_command)
         send_cmd = [
-            'tmux', 'send-keys', '-t', f"{self.tmux_session}:{self.tmux_window}",
+            'tmux', 'send-keys', '-t', f"{self.tmux_session}:Claude",
             claude_cmd, 'Enter'
         ]
         await self._run_command(send_cmd)

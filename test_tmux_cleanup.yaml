@@ -1,9 +1,0 @@
-name: test_tmux_cleanup
-description: Simple test to verify tmux cleanup on interrupt
-version: 1.0
-
-initial_prompt: |
-  Create a simple Python script that prints "Hello from agent" every 2 seconds.
-  Save it as test_agent.py.
-
-steps: []
