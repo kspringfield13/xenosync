@@ -102,6 +102,20 @@ class Config:
             'project_quality_threshold': 3,       # Minimum files per project for completion consideration
             'require_completion_confidence': True, # Use enhanced completion detection instead of basic patterns
             'project_substantial_work_threshold': 500,  # Minimum total characters in project files
+            
+            # Post-merge finalization settings
+            'enable_finalization': True,  # Enable post-merge integration & debugging phase
+            'finalization_timeout': 600,  # Maximum time for finalization (10 minutes)
+            'finalization_agent_name': 'finalizer',  # Name for the finalization agent
+            'finalization_tasks': [  # Tasks for finalization agent to perform
+                'immediate_testing',
+                'debug_and_fix',
+                'core_mechanics_validation',
+                'integration_testing',
+                'playability_validation',
+                'production_readiness'
+            ],
+            'finalization_prompt_template': None,  # Use default if None
         }
     
     def get(self, key: str, default: Any = None) -> Any:

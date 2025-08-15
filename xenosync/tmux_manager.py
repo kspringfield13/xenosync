@@ -433,3 +433,41 @@ class TmuxManager:
                 f"tmux select-layout -t {self.session}:agents -E",
                 shell=True, capture_output=True
             )
+    
+    def add_new_pane(self, agent_id: int) -> bool:
+        """Create a new pane for an agent and update mapping"""
+        try:
+            # Split window to create new pane
+            result = subprocess.run(
+                f"tmux split-window -t {self.session}:agents",
+                shell=True, capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                logger.error(f"Failed to create new pane: {result.stderr}")
+                return False
+            
+            # Get all current pane IDs to find the new one
+            result = subprocess.run(
+                f"tmux list-panes -t {self.session}:agents -F '#{{pane_index}}'",
+                shell=True, capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                logger.error(f"Failed to list panes: {result.stderr}")
+                return False
+            
+            pane_ids = sorted([int(pid.strip()) for pid in result.stdout.strip().split('\n')])
+            new_pane_id = max(pane_ids)  # The highest ID should be the new pane
+            
+            # Update pane mapping
+            self.pane_mapping[agent_id] = f"{self.session}:agents.{new_pane_id}"
+            
+            # Reapply layout to redistribute panes nicely
+            total_panes = len(pane_ids)
+            self.create_dashboard_layout(total_panes)
+            
+            logger.info(f"Created new pane {new_pane_id} for agent {agent_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error creating new pane for agent {agent_id}: {e}")
+            return False

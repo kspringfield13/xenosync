@@ -156,6 +156,9 @@ class AgentManager:
         self.task_minimum_duration = config.get('task_minimum_duration', 300)  # 5 minutes default
         self.task_completion_check_interval = config.get('task_completion_check_interval', 180)  # 3 minutes default
         logger.info(f"Task timing: min {self.task_minimum_duration}s, check interval {self.task_completion_check_interval}s")
+        
+        # Flag to stop monitoring regular agents when finalization starts
+        self.stop_regular_monitoring = False
     
     def set_tmux_manager(self, tmux_manager):
         """Set the tmux manager for visual monitoring"""
@@ -883,6 +886,15 @@ class AgentManager:
                     if agent.status == AgentStatus.STOPPED:
                         continue
                     
+                    # Skip monitoring regular agents if finalization has started
+                    # Only monitor the finalization agent (highest ID)
+                    if self.stop_regular_monitoring:
+                        # Get the highest agent ID (finalization agent)
+                        max_agent_id = max(a.id for a in self.agents) if self.agents else -1
+                        # Skip all agents except the finalization agent
+                        if agent.id < max_agent_id:
+                            continue
+                    
                     # Track previous status for transition detection
                     previous_status = self._agent_work_tracking.get(agent.id)
                     
@@ -1124,6 +1136,108 @@ class AgentManager:
             }
         }
 
+    async def spawn_finalization_agent(self, session_id: str, work_dir: str, prompt: str) -> Optional[int]:
+        """Spawn a special finalization agent for post-merge optimization"""
+        try:
+            # Create finalization agent with special ID (using next available ID)
+            agent_id = len(self.agents)  # Use next ID after regular agents
+            
+            # Generate unique ID for finalization agent
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            uid = f"finalizer_{timestamp}_{session_id[:8]}"
+            
+            agent = Agent(
+                id=agent_id,
+                uid=uid,
+                session_id=session_id,
+                status=AgentStatus.STARTING
+            )
+            
+            # Set the working directory to the final-project folder
+            agent.worktree_path = str(work_dir)
+            
+            # Add to agents list
+            self.agents.append(agent)
+            
+            # Stop monitoring regular agents now that finalization is starting
+            self.stop_regular_monitoring = True
+            logger.info("Stopping regular agent monitoring - finalization phase started")
+            
+            # Create Claude interface for finalization agent
+            interface = ClaudeInterface(self.config)
+            self.interfaces[agent_id] = interface
+            
+            # Set the working directory for the interface
+            interface.working_directory = work_dir
+            
+            # Set up tmux pane for finalization agent
+            if self.tmux_manager:
+                # Create new pane for finalization agent first
+                pane_created = self.tmux_manager.add_new_pane(agent_id)
+                if not pane_created:
+                    logger.warning(f"Failed to create tmux pane for finalization agent {agent_id}, falling back to direct mode")
+                    # Fallback to direct mode if tmux pane creation fails
+                    interface.use_tmux = False
+                else:
+                    # Successfully created pane, set tmux pane mode
+                    interface.set_tmux_pane_mode(self.tmux_manager.session, agent_id)
+                    logger.info(f"Finalization agent will use newly created tmux pane {agent_id}")
+            else:
+                # No tmux manager available, use direct mode
+                logger.info("No tmux manager available, finalization agent will run in direct mode")
+                interface.use_tmux = False
+            
+            # If using direct mode, ensure claude command can be found
+            if not interface.use_tmux:
+                import shutil
+                claude_cmd = self.config.get('claude_command', 'claude')
+                if isinstance(claude_cmd, list):
+                    claude_cmd = claude_cmd[0]
+                
+                claude_path = shutil.which(claude_cmd)
+                if not claude_path:
+                    logger.error(f"Claude command '{claude_cmd}' not found in PATH for finalization agent")
+                    return None
+                else:
+                    logger.info(f"Using claude command at: {claude_path}")
+            
+            # Start Claude in the final-project directory
+            await interface.start(session_id, uid)
+            
+            # Send the finalization prompt
+            await interface.send_message(prompt)
+            agent.last_message_sent = datetime.now()
+            agent.status = AgentStatus.WORKING
+            
+            logger.info(f"Spawned finalization agent {uid} (ID: {agent_id}) in {work_dir}")
+            
+            return agent_id
+            
+        except Exception as e:
+            logger.error(f"Failed to spawn finalization agent: {e}")
+            return None
+    
+    async def stop_finalization_agent(self, agent_id: int):
+        """Stop the finalization agent"""
+        try:
+            agent = self.get_agent_by_id(agent_id)
+            if not agent:
+                logger.warning(f"Finalization agent {agent_id} not found")
+                return
+            
+            # Stop the Claude interface
+            if agent_id in self.interfaces:
+                interface = self.interfaces[agent_id]
+                await interface.stop()
+                del self.interfaces[agent_id]
+            
+            # Update agent status
+            agent.status = AgentStatus.STOPPED
+            logger.info(f"Stopped finalization agent {agent.uid}")
+            
+        except Exception as e:
+            logger.error(f"Error stopping finalization agent: {e}")
+    
     # Compatibility methods for existing code
     @property
     def pool(self):

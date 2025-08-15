@@ -129,6 +129,22 @@ class ProjectParallelStrategy(ProjectExecutionStrategy):
                 # Log final project location
                 final_project_path = self.coordinator.workspace_dir / 'final-project'
                 logger.info(f"✅ Final merged project available at: {final_project_path}")
+                
+                # Run finalization phase if enabled
+                if self.agent_manager.config.get('enable_finalization', True):
+                    logger.info("")
+                    logger.info("Starting post-merge finalization phase...")
+                    finalization_success = await self._run_finalization_phase(session_id, prompt)
+                    
+                    if finalization_success:
+                        logger.info("🎉 PROJECT FINALIZED AND READY FOR PRODUCTION!")
+                        logger.info(f"📁 Optimized project location: {final_project_path}")
+                    else:
+                        logger.warning("Finalization phase failed, but merged project is still available")
+                        # Don't fail the entire execution if finalization fails
+                        # The merged project is still usable
+                else:
+                    logger.info("Finalization phase disabled in configuration")
             else:
                 logger.warning("Some agents failed to complete their tasks")
                 return False
@@ -321,9 +337,11 @@ Begin with task 1: {tasks[0].content}
                     status_summary.append(f"Agent {agent_id}: {progress['status']} ({work_duration_minutes:.1f}m)")
                     all_complete = False
             
-            # Log status
+            # Log status with each agent on its own line
             if status_summary:
-                logger.info("Status: " + " | ".join(status_summary))
+                logger.info("Status Update:")
+                for status in status_summary:
+                    logger.info(f"  {status}")
             
             # Check if we should mark agents as complete
             if agents_ready_for_completion:
@@ -405,6 +423,188 @@ Begin with task 1: {tasks[0].content}
             
         except Exception as e:
             logger.error(f"Error validating project quality for agent {agent_id}: {e}")
+            return False
+    
+    async def _run_finalization_phase(self, session_id: str, prompt: SyncPrompt) -> bool:
+        """Run post-merge optimization and documentation with dedicated finalization agent"""
+        try:
+            logger.info("=" * 60)
+            logger.info("🔧 POST-MERGE FINALIZATION PHASE")
+            logger.info("=" * 60)
+            
+            # Get finalization settings from config
+            finalization_timeout = self.agent_manager.config.get('finalization_timeout', 600)
+            finalization_tasks = self.agent_manager.config.get('finalization_tasks', [
+                'immediate_testing',
+                'debug_and_fix',
+                'core_mechanics_validation',
+                'integration_testing', 
+                'playability_validation',
+                'production_readiness'
+            ])
+            
+            # Get the final project path
+            final_project_path = self.coordinator.workspace_dir / 'final-project'
+            
+            if not final_project_path.exists():
+                logger.error("Final project directory does not exist, cannot run finalization")
+                return False
+            
+            logger.info(f"Starting finalization agent for: {final_project_path}")
+            
+            # Build the finalization prompt
+            task_descriptions = {
+                'immediate_testing': "Test the application immediately to verify it works",
+                'debug_and_fix': "Identify and fix any bugs, errors, or broken functionality",
+                'core_mechanics_validation': "Ensure all core features and mechanics work properly",
+                'integration_testing': "Test all components work together seamlessly",
+                'playability_validation': "For games: ensure the game is actually playable and fun",
+                'production_readiness': "Final optimization and polish for production use"
+            }
+            
+            tasks_text = "\n".join([
+                f"   {i+1}. {task_descriptions.get(task, task)}"
+                for i, task in enumerate(finalization_tasks)
+            ])
+            
+            finalization_prompt = f"""
+You are an Integration Engineer & QA Specialist responsible for making this merged project ACTUALLY WORK.
+
+**Project Location:** {final_project_path}
+**Original Task:** {prompt.name}
+{prompt.description}
+
+🚨 **CRITICAL MISSION: MAKE IT WORK FIRST, OPTIMIZE LATER** 🚨
+
+You are working in the final merged project directory that contains contributions from multiple agents.
+Your PRIMARY job is to ensure the project actually functions correctly, not to optimize code.
+
+**INTEGRATION & QA TASKS:**
+{tasks_text}
+
+**STEP-BY-STEP INSTRUCTIONS:**
+
+1. **IMMEDIATE TESTING (HIGHEST PRIORITY)**
+   - Open index.html in a browser and see if it works
+   - Try to interact with the application/game immediately
+   - Check browser console for any JavaScript errors
+   - Test basic functionality (can you play the game? do buttons work?)
+   - Document what works and what doesn't work
+
+2. **DEBUG AND FIX CRITICAL ISSUES**
+   - Fix any JavaScript errors preventing the app from running
+   - Resolve missing file references (404 errors for CSS, images, sounds)
+   - Fix broken HTML structure or missing elements
+   - Correct any syntax errors in CSS or JavaScript
+   - Ensure all required assets are present and properly linked
+
+3. **CORE MECHANICS VALIDATION**
+   - For games: Can the player move? Do controls respond? Does gameplay work?
+   - For apps: Do main features function? Can users complete intended actions?
+   - Test each major feature individually
+   - Fix broken game mechanics, movement, collision detection
+   - Ensure core functionality works before worrying about polish
+
+4. **INTEGRATION TESTING**
+   - Test how different components work together
+   - Verify data flows between different parts of the application
+   - Check if multiple agents' contributions integrate properly
+   - Resolve conflicts between different implementations
+   - Merge duplicate code ONLY if it doesn't break functionality
+
+5. **PLAYABILITY VALIDATION (FOR GAMES)**
+   - Actually play the game for several minutes
+   - Check if it's fun and engaging, not just technically functional
+   - Verify game rules work correctly (scoring, win/lose conditions)
+   - Test edge cases (what happens when player reaches boundaries?)
+   - Ensure game progression works (levels, difficulty scaling)
+
+6. **PRODUCTION READINESS (LOWEST PRIORITY)**
+   - ONLY after everything works: clean up code organization
+   - Create README.md with setup instructions and how to play/use
+   - Remove debug console.log statements
+   - Add basic comments for complex logic
+   - Minor performance optimizations if needed
+
+**🎯 SUCCESS CRITERIA:**
+- The application/game WORKS when you open it
+- All major features are functional
+- No critical bugs or errors
+- Users can actually use/play the project successfully
+- Browser console shows no errors during normal use
+
+**⚠️ CRITICAL GUIDELINES:**
+- NEVER optimize code that isn't working yet
+- NEVER remove code unless you're certain it's unused
+- If you find duplicate implementations, TEST both before choosing one
+- Focus on making it work, not making it pretty
+- When in doubt, prioritize functionality over optimization
+- Test frequently as you make changes
+
+**🔧 DEBUGGING METHODOLOGY:**
+1. Test first, understand what's broken
+2. Fix the most critical issues first (app won't start)
+3. Move to medium issues (features don't work)
+4. Finally address minor issues (polish)
+5. Test again after each fix
+
+Your success is measured by whether someone can open this project and actually use it without encountering errors.
+MAKE IT WORK FIRST. Everything else is secondary.
+
+Start by opening the project and testing it immediately to see what's broken.
+"""
+            
+            # Spawn the finalization agent
+            logger.info("Spawning finalization agent...")
+            
+            # Use agent manager to spawn a special finalization agent
+            finalization_agent_id = await self.agent_manager.spawn_finalization_agent(
+                session_id,
+                final_project_path,
+                finalization_prompt
+            )
+            
+            if finalization_agent_id is None:
+                logger.error("Failed to spawn finalization agent")
+                return False
+            
+            logger.info(f"Finalization agent spawned with ID: {finalization_agent_id}")
+            
+            # Monitor finalization progress with timeout
+            start_time = asyncio.get_event_loop().time()
+            check_interval = 15  # Check every 15 seconds
+            
+            while (asyncio.get_event_loop().time() - start_time) < finalization_timeout:
+                await asyncio.sleep(check_interval)
+                
+                # Check if finalization agent is still working
+                agent = self.agent_manager.get_agent_by_id(finalization_agent_id)
+                if not agent:
+                    logger.error("Finalization agent disappeared")
+                    return False
+                
+                # Check agent status
+                if agent.status == 'completed':
+                    logger.info("✅ Finalization phase completed successfully")
+                    return True
+                elif agent.status == 'error':
+                    logger.error("Finalization agent encountered an error")
+                    return False
+                
+                # Log progress
+                elapsed = int(asyncio.get_event_loop().time() - start_time)
+                remaining = finalization_timeout - elapsed
+                logger.info(f"Finalization in progress... ({elapsed}s elapsed, {remaining}s remaining)")
+            
+            logger.warning(f"Finalization phase timed out after {finalization_timeout} seconds")
+            
+            # Stop the finalization agent
+            await self.agent_manager.stop_finalization_agent(finalization_agent_id)
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Finalization phase failed: {e}")
             return False
 
 

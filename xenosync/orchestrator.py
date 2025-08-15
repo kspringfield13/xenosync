@@ -84,7 +84,6 @@ class XenosyncOrchestrator:
         # Control flags
         self.running = False
         self.interrupted = False
-        self.force_merge = False  # Flag for manual merge trigger
         
         # Register signal handlers for graceful shutdown
         self._setup_signal_handlers()
@@ -97,14 +96,9 @@ class XenosyncOrchestrator:
                 self.interrupted = True
                 self._cleanup_tmux_sessions()
             
-            def merge_handler(signum, frame):
-                logger.info(f"Received signal {signum} (SIGUSR1), triggering manual merge")
-                self.force_merge = True
-            
             # Register handlers for common termination signals
             signal.signal(signal.SIGINT, shutdown_handler)   # Ctrl+C
             signal.signal(signal.SIGTERM, shutdown_handler)  # Termination request
-            signal.signal(signal.SIGUSR1, merge_handler)     # Manual merge trigger
             
             logger.debug("Signal handlers registered successfully")
         except Exception as e:
@@ -217,21 +211,33 @@ class XenosyncOrchestrator:
             self._cleanup_tmux_sessions()
     
     async def _monitor_agents(self, session: Session):
-        """Monitor running agents with accurate status tracking"""
+        """Monitor running agents after execution completes"""
         logger.info("=" * 60)
-        logger.info("AGENTS EXECUTING IN PARALLEL MODE")
+        logger.info("✅ EXECUTION COMPLETE - MONITORING MODE")
         logger.info("=" * 60)
         
-        logger.info("📊 Parallel Execution:")
-        logger.info("  • Tasks have been distributed among agents")
-        logger.info("  • Each agent works independently on assigned tasks")
-        logger.info("  • No coordination required between agents")
+        # Check if merge was successful
+        coord_status = self.coordination.get_session_status()
+        merged = coord_status.get('merged_projects', 0)
+        total = coord_status.get('total_projects', 0)
+        
+        if merged > 0:
+            final_project = self.coordination.workspace_dir / 'final-project'
+            logger.info("🎉 PROJECT SUCCESSFULLY MERGED!")
+            logger.info(f"📁 Final project location: {final_project}")
+            logger.info(f"📊 Merged {merged}/{total} agent projects")
+            logger.info("")
+            logger.info("You can now:")
+            logger.info("  • Review the final-project directory")
+            logger.info("  • Copy/move it to your desired location")
+        else:
+            logger.info("⚠️  No projects were merged - check agent logs for issues")
         
         if self.tmux_manager:
             logger.info("")
-            logger.info(f"✓ Agents running in tmux session: {self.tmux_manager.session}")
+            logger.info(f"✓ Agents still visible in tmux session: {self.tmux_manager.session}")
             logger.info("")
-            logger.info("To view agents:")
+            logger.info("To view agent logs:")
             logger.info(f"  tmux attach -t {self.tmux_manager.session}")
             logger.info("")
             logger.info("Navigation:")
@@ -241,115 +247,34 @@ class XenosyncOrchestrator:
         
         logger.info("")
         logger.info("Press Ctrl+C to shutdown agents and exit")
-        logger.info("")
-        import os
-        logger.info("Manual merge triggers:")
-        logger.info(f"  • Signal trigger: kill -USR1 {os.getpid()}")
-        logger.info("  • File trigger: touch .xenosync_merge_now")
         logger.info("=" * 60)
         
         # Initialize tracking variables
         last_status_check = time.time()
         status_interval = 30  # Show status every 30 seconds
         
-        # Monitor loop
+        # Simple monitoring loop - just keep system alive and show status
         try:
+            # Check if merge has already happened
+            coord_status = self.coordination.get_session_status()
+            merged_count = coord_status.get('merged_projects', 0)
+            
             while not self.interrupted:
                 current_time = time.time()
                 
-                # Show detailed status update every interval
+                # Only show detailed status if not merged yet
                 if current_time - last_status_check >= status_interval:
-                    await self._show_detailed_status(session)
+                    if merged_count == 0:
+                        # Show detailed status only if not merged
+                        await self._show_detailed_status(session)
+                    else:
+                        # Simple monitoring message when already merged
+                        logger.info("")
+                        logger.info("Monitoring mode active - project merged and ready")
+                        logger.info("Press Ctrl+C to shutdown and exit")
                     last_status_check = current_time
                 
-                # Check for manual merge triggers
-                manual_merge_requested = False
-                
-                # Check file-based trigger
-                merge_trigger_file = Path('.xenosync_merge_now')
-                if merge_trigger_file.exists():
-                    logger.info("")
-                    logger.info("🔧 Manual merge triggered via file (.xenosync_merge_now)")
-                    logger.info("")
-                    manual_merge_requested = True
-                    # Remove trigger file
-                    try:
-                        merge_trigger_file.unlink()
-                    except Exception as e:
-                        logger.warning(f"Failed to remove trigger file: {e}")
-                
-                # Check signal-based trigger
-                if self.force_merge:
-                    logger.info("")
-                    logger.info("🔧 Manual merge triggered via signal (SIGUSR1)")
-                    logger.info("")
-                    manual_merge_requested = True
-                    self.force_merge = False  # Reset flag
-                
-                # Check if all projects are completed and ready to merge
-                coord_status = self.coordination.get_session_status()
-                completed = coord_status.get('completed_projects', 0)
-                total = coord_status.get('total_projects', 0)
-                merged = coord_status.get('merged_projects', 0)
-                
-                # Improved merge trigger logic with dual conditions and safety checks
-                should_merge = False
-                merge_reason = ""
-                
-                # Safety check: Don't merge if already merged
-                if merged > 0:
-                    if manual_merge_requested:
-                        logger.info("🔧 Manual merge requested, but projects already merged. Skipping.")
-                elif completed == 0:
-                    if manual_merge_requested:
-                        logger.info("🔧 Manual merge requested, but no projects completed yet. Waiting for at least one completion.")
-                else:
-                    # Condition 1: Automatic merge when all projects completed
-                    if completed > 0 and completed == total:
-                        should_merge = True
-                        merge_reason = "automatic"
-                    
-                    # Condition 2: Manual merge when requested with at least 1 completed
-                    elif manual_merge_requested and completed > 0:
-                        should_merge = True
-                        merge_reason = "manual"
-                
-                if should_merge:
-                    logger.info("")
-                    if merge_reason == "manual":
-                        logger.info(f"🔧 Manual merge initiated! Merging {completed}/{total} completed projects...")
-                    elif merge_reason == "automatic":
-                        logger.info("🎯 All agent projects completed! Starting automatic merge...")
-                    logger.info("")
-                    
-                    try:
-                        merge_results = self.coordination.merge_agent_projects()
-                        
-                        if merge_results['merged_projects']:
-                            final_project = self.coordination.workspace_dir / 'final-project'
-                            logger.info("✅ MERGE COMPLETED SUCCESSFULLY!")
-                            logger.info(f"📁 Final project location: {final_project}")
-                            logger.info(f"📊 Merged {len(merge_results['merged_projects'])} agent projects")
-                            logger.info(f"📄 Total files in final project: {merge_results['total_files']}")
-                            
-                            if merge_results['conflicts']:
-                                logger.warning(f"⚠️  {len(merge_results['conflicts'])} file conflicts detected:")
-                                for conflict in merge_results['conflicts'][:5]:  # Show first 5
-                                    agents = conflict.get('agents', [])
-                                    file = conflict.get('file', 'unknown')
-                                    logger.warning(f"   • {file}: agents {agents}")
-                            
-                            logger.info("")
-                            logger.info("🎉 PROJECT READY! Check the final-project directory.")
-                            logger.info("   You can now copy/move the final-project folder anywhere.")
-                            logger.info("")
-                            
-                        else:
-                            logger.error("❌ Merge failed - no projects were merged")
-                            
-                    except Exception as e:
-                        logger.error(f"❌ Merge failed with error: {e}")
-                
+                # Simply sleep and continue monitoring
                 await asyncio.sleep(5)
                 
         except KeyboardInterrupt:
@@ -406,13 +331,23 @@ class XenosyncOrchestrator:
         # Show individual agent project details
         logger.info("")
         logger.info("🔍 Agent Projects:")
+        
+        # Check if projects have been merged
+        merged_count = coord_summary.get('merged_projects', 0)
+        
         for agent_info in coord_summary.get('agents', []):
             agent_id = agent_info.get('agent_id')
             status = agent_info.get('status', 'unknown')
             files = agent_info.get('files_created', 0)
             commits = agent_info.get('commits', 0)
             
-            status_icon = '🔄' if status == 'in_progress' else ('✅' if status == 'completed' else '📝')
+            # If merge has happened, show merged status instead of in_progress
+            if merged_count > 0 and status == 'in_progress':
+                status = 'merged'
+                status_icon = '✅'
+            else:
+                status_icon = '🔄' if status == 'in_progress' else ('✅' if status == 'completed' else '📝')
+            
             logger.info(f"  Agent {agent_id}: {status_icon} {status} - {files} files, {commits} commits")
         
         # File Activity

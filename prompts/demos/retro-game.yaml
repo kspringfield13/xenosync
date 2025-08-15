@@ -6,7 +6,7 @@ initial_prompt: |
 
   The game should feature:
   - Classic maze gameplay with dot collection
-  - Four unique ghosts with different AI behaviors
+  - Four unique ghosts with different AI behaviors  
   - Power pellets that turn the tables on ghosts
   - Smooth grid-based movement and animations
   - Progressive difficulty with multiple levels
@@ -21,255 +21,525 @@ initial_prompt: |
   - LocalStorage for high scores and progress
   - Web Audio API for classic arcade sounds
   
-  TESTING PHILOSOPHY:
-  - Test early, test often - don't wait until the end to validate your work
-  - Every feature should be tested as soon as it's implemented
-  - Test in multiple browsers (Chrome, Firefox, Safari, Edge)
-  - Verify game mechanics work smoothly at 60fps
-  - Test edge cases: collision detection, maze boundaries, ghost transitions
-  - Validate user experience: controls feel responsive, game is fun to play
-  - Document any bugs found and ensure they're fixed before moving on
+  CRITICAL SUCCESS FACTORS:
+  - Functionality FIRST: Get core mechanics working perfectly before adding polish
+  - Test immediately: Validate each feature as soon as you implement it
+  - Movement is KING: Ensure character movement feels smooth and responsive
+  - Integration focus: Make sure all systems work together seamlessly
+  - Browser testing: Test in Chrome, Firefox, Safari, Edge
+  - Performance: Maintain smooth 60fps gameplay
   
-  Focus on creating an authentic arcade experience with smooth gameplay, intelligent ghost AI, and satisfying game feel. Remember: a working, thoroughly tested game is always better than an incomplete feature-rich one.
+  Remember: A simple game that works perfectly is infinitely better than a complex game with broken mechanics. Build systematically, test thoroughly, and ensure each step creates a solid foundation for the next.
 
 metadata:
-  recommended_agents: 3
+  recommended_agents: 7
   recommended_mode: parallel
-  estimated_time: 30
+  estimated_time: 35
   difficulty: intermediate
-  tags: [game, arcade, pacman, canvas, javascript, retro, ai]
+  tags: [game, arcade, pacman, canvas, javascript, retro, ai, movement, collision]
 
 steps:
-  - content: Set up the project structure and game framework
+  - content: Game Foundation & Player Movement System
     description: |
-      Create the foundational HTML5 game structure:
-      - index.html with canvas element and arcade cabinet styling
-      - CSS with retro arcade fonts and neon colors
-      - Main game loop with requestAnimationFrame
-      - Asset manager for sprites, sounds, and maze data
-      - Game configuration and constants file
-      - Basic file structure (js/, css/, assets/, sounds/)
-    
-  - content: Implement maze generation and rendering system
+      **Build the complete foundation with working player movement:**
+      
+      **Project Setup:**
+      - Create index.html with HTML5 canvas element
+      - Set up basic CSS with retro arcade styling (neon colors, pixel fonts)
+      - Initialize main JavaScript files: game.js, player.js, utils.js
+      - Create basic project structure: js/, css/, assets/, sounds/
+      - Set up game loop with requestAnimationFrame (60fps target)
+      
+      **Player Movement Implementation:**
+      - Create Player class with grid-based position system (32x32 pixel grid)
+      - Implement smooth movement interpolation between grid positions
+      - Add keyboard input handling (Arrow keys + WASD)
+      - Create movement queue system for responsive controls
+      - Add directional sprites and animation system
+      - Implement basic collision detection with boundaries
+      
+      **Essential Testing & Validation:**
+      - Test player movement in all 4 directions (up, down, left, right)
+      - Verify smooth 60fps movement with no stuttering
+      - Test keyboard responsiveness (no input lag)
+      - Confirm movement stays aligned to grid system
+      - Test movement queuing (pressing keys before reaching grid position)
+      - Validate in multiple browsers (Chrome, Firefox, Safari, Edge)
+      - Test with different keyboard layouts and devices
+      - Ensure consistent timing across different frame rates
+      
+      **Deliverables:**
+      - Fully functional player character that moves smoothly
+      - Responsive keyboard controls with movement queuing
+      - Basic HTML5 canvas game setup
+      - Foundation code architecture for remaining features
+      
+      **Success Criteria:** Player character moves perfectly in all directions with smooth, responsive controls before proceeding to maze implementation.
+
+  - content: Maze System & Collision Detection
     description: |
-      Build the maze infrastructure:
-      - Create maze data structure (2D array or tile system)
-      - Design classic Pac-Man style maze layout
-      - Implement maze rendering with walls and paths
-      - Add dot and power pellet placement logic
-      - Create tunnel/warp zones on maze edges
-      - Include ghost house in center of maze
-      - Optimize rendering for performance
-    
-  - content: Create the player character (Pac-Man) mechanics
+      **Build the complete maze system with perfect collision detection:**
+      
+      **Maze Implementation:**
+      - Design classic Pac-Man style maze layout (25x25 grid recommended)
+      - Create maze data structure using 2D array (0=path, 1=wall, 2=dot, 3=power pellet)
+      - Implement maze rendering system with wall sprites/graphics
+      - Add tunnel/warp zones on left and right edges of maze
+      - Create ghost house area in center with entry/exit logic
+      - Include corner detection for smooth turning mechanics
+      
+      **Collision Detection System:**
+      - Implement precise wall collision detection
+      - Add boundary collision for maze edges (except tunnels)
+      - Create collision prediction system (check next position before moving)
+      - Handle corner cutting and wall scraping edge cases
+      - Implement tunnel wrapping logic (exit left, appear right)
+      - Add collision debugging visualization (optional, for testing)
+      
+      **Advanced Movement Features:**
+      - Enable smooth turning at maze intersections
+      - Implement wall sliding (attempt to turn when hitting wall)
+      - Add movement buffering for tight corridor navigation
+      - Create position snapping for perfect grid alignment
+      
+      **Comprehensive Testing & Validation:**
+      - Test collision detection with every wall in the maze
+      - Verify player cannot move through walls in any scenario  
+      - Test tunnel warping in both directions (left/right edges)
+      - Validate smooth turning at all maze intersections
+      - Test corner cutting scenarios and wall scraping
+      - Verify movement remains smooth when collision occurs
+      - Test rapid directional changes in tight corridors
+      - Confirm grid alignment maintains precision throughout gameplay
+      - Test edge cases: corners, dead ends, narrow passages
+      - Performance test: ensure collision detection doesn't impact 60fps
+      
+      **Deliverables:**
+      - Complete functional maze with perfect collision detection
+      - Smooth player movement that respects all maze boundaries
+      - Working tunnel system for screen wrapping
+      - Robust foundation for dot placement and ghost navigation
+      
+      **Success Criteria:** Player moves perfectly through the entire maze with zero collision bugs and smooth navigation before implementing dot collection.
+
+  - content: Dot Collection & Scoring System
     description: |
-      Develop the main character controls and behavior:
-      - Grid-based movement with smooth animations
-      - Keyboard controls (arrow keys and WASD)
-      - Collision detection with walls
-      - Dot and power pellet collection
-      - Animated sprite with directional facing
-      - Movement queuing for smoother control
-      - Death animation and respawn logic
-    
-  - content: Implement dot collection and scoring system
-    description: |
-      Create the core collection mechanics:
-      - Regular dots worth 10 points
-      - Power pellets worth 50 points
-      - Dot counter for level completion
-      - Combo system for eating ghosts
-      - Bonus fruit spawning (cherry, strawberry, orange)
-      - Score display with retro font
-      - High score tracking and display
-      - Point popup animations
-    
-  - content: Test core game mechanics and player experience
-    description: |
-      Comprehensive testing of implemented features:
-      - Verify Pac-Man movement in all directions
-      - Test collision detection with walls and maze boundaries
-      - Confirm dot collection works correctly and updates score
-      - Validate power pellet collection and scoring
+      **Implement the complete dot collection and scoring mechanics:**
+      
+      **Dot System Implementation:**
+      - Place regular dots (pellets) throughout maze paths (240 dots typical)
+      - Add 4 power pellets in maze corners
+      - Create dot collision detection with player
+      - Implement dot removal system (visual and data)
+      - Add bonus fruit spawning system (cherry, strawberry, orange, apple)
+      - Create fruit timer system (appears after eating specific dot counts)
+      
+      **Scoring System:**
+      - Regular dots: 10 points each
+      - Power pellets: 50 points each  
+      - Bonus fruits: 100-5000 points (increasing value by level)
+      - Implement score display with retro-style font
+      - Add score multiplier system for consecutive actions
+      - Create level completion detection (all dots collected)
+      
+      **Visual & Audio Feedback:**
+      - Add dot collection animation/effect
+      - Implement score popup animations
+      - Create sound effects for dot collection
+      - Add power pellet activation sound and visual effect
+      - Implement bonus fruit collection feedback
+      - Create score display updates in real-time
+      
+      **High Score System:**
+      - Implement LocalStorage-based high score saving
+      - Create high score display on game screen
+      - Add new high score detection and celebration
+      - Implement score persistence across browser sessions
+      
+      **Comprehensive Testing & Validation:**
+      - Test dot collection in every maze location
+      - Verify score increases correctly for each dot type
       - Test level completion when all dots are collected
-      - Verify score display updates in real-time
-      - Test high score saving and loading from LocalStorage
-      - Check game runs smoothly at 60fps in all target browsers
-      - Test keyboard responsiveness (arrow keys and WASD)
-      - Verify movement queuing works for smooth control
-      - Test death animation and respawn mechanics
-      - Document any performance issues or bugs found
-      - Fix all identified issues before proceeding to ghost AI
-    
-  - content: Build ghost AI with unique behaviors
-    description: |
-      Implement the four classic ghost personalities:
-      - Blinky (red): Direct chase behavior
-      - Pinky (pink): Ambush by targeting ahead of player
-      - Inky (cyan): Unpredictable, uses Blinky's position
-      - Clyde (orange): Chase when far, scatter when close
-      - Scatter mode where ghosts patrol corners
-      - Chase mode with increasing aggression
-      - Frightened mode when power pellet eaten
-      - Pathfinding algorithm (A* or simplified)
-      - Ghost house exit logic and timing
-    
-  - content: Create power-up and ghost vulnerability system
-    description: |
-      Implement power pellet mechanics:
-      - Timer-based ghost vulnerability
-      - Blue/white flashing frightened ghosts
-      - Reversed ghost movement when frightened
-      - Points for eating ghosts (200, 400, 800, 1600)
-      - Ghost eyes returning to house after eaten
-      - Power-up duration decreases with level
-      - Warning flash before power-up ends
-      - Sound cues for power-up state
-    
-  - content: Integration testing of AI and game systems
-    description: |
-      Comprehensive testing of all game mechanics working together:
-      - Test all four ghost AI behaviors in various scenarios
-      - Verify ghost pathfinding works correctly in all maze areas
-      - Test power pellet activation and ghost state transitions
-      - Confirm ghost vulnerability timer works as expected
-      - Test eating ghosts and score multiplier progression (200→400→800→1600)
-      - Verify ghost eyes return to house correctly after being eaten
-      - Test ghost house exit logic and timing
-      - Confirm scatter/chase mode transitions work properly
-      - Test edge cases: player-ghost collisions, tunnel warping, maze corners
-      - Verify game performance with all AI running simultaneously
-      - Test level progression and ghost speed increases
-      - Confirm power pellet duration decreases with level advancement
-      - Test player death scenarios and life system
-      - Validate all game states work correctly (ready, playing, paused, game over)
-      - Document any AI behavior issues or performance problems
-      - Fix all identified issues before proceeding to visual effects
-    
-  - content: Develop visual effects and animations
-    description: |
-      Create the retro arcade presentation:
-      - Pixel-perfect sprite animations
-      - Classic arcade color palette
-      - Smooth movement interpolation
-      - Death animations for Pac-Man
-      - Ghost animation states (normal, frightened, eyes)
-      - Particle effects for dot collection
-      - Screen flash effects for power-ups
-      - Arcade CRT screen effect overlay
-      - Attract mode demo when idle
-    
-  - content: Implement audio and sound effects system
-    description: |
-      Create authentic arcade audio:
-      - Classic wakka-wakka eating sound
-      - Ghost siren that increases with tension
-      - Power pellet activation sound
-      - Ghost eaten chomping sound
-      - Death jingle for losing a life
-      - Level complete fanfare
-      - Bonus fruit collection sounds
-      - Retro intro music
-      - Volume controls and mute option
-    
-  - content: Build game states and UI systems
-    description: |
-      Create game flow and interface:
-      - Start screen with arcade attract mode
-      - Ready message before level start
-      - Pause functionality
-      - Game over screen with final score
-      - Level transitions with brief intermission
-      - Lives display (3 lives to start)
-      - Current level indicator
-      - Settings menu for difficulty
-      - Instructions/how to play screen
-      - Credits screen
-    
-  - content: Final comprehensive testing and validation
-    description: |
-      Complete end-to-end testing of the finished game:
-      - Full gameplay testing: Complete multiple levels from start to finish
-      - Cross-browser compatibility testing (Chrome, Firefox, Safari, Edge)
-      - Performance testing: Confirm smooth 60fps gameplay on various devices
-      - User experience testing: Ensure controls feel responsive and intuitive
-      - Audio testing: Verify all sounds work correctly and enhance gameplay
-      - Visual testing: Confirm all animations and effects work as expected
-      - State management testing: Test all transitions (start→play→pause→game over)
-      - Persistence testing: Verify high scores save/load correctly
-      - Edge case testing: Tunnel warping, simultaneous collisions, rapid inputs
-      - Accessibility testing: Keyboard navigation, color contrast, screen readers
-      - Mobile device testing: Touch controls (if implemented), responsive design
-      - Load testing: Game startup performance, asset loading times
-      - Stress testing: Extended gameplay sessions, memory usage monitoring
-      - Bug regression testing: Verify all previously found issues are resolved
-      - Final quality assurance: Game is fun, balanced, and ready for release
-      - Document all test results, performance benchmarks, and known limitations
-      - Create troubleshooting guide based on testing findings
-    
-  - content: Create comprehensive game documentation
-    description: |
-      Generate a detailed GAME_README.md file that includes:
+      - Validate high score saving and loading from LocalStorage
+      - Test bonus fruit spawning timing and collection
+      - Verify score display updates immediately upon collection
+      - Test score persistence across browser refreshes
+      - Confirm no dots remain collectible after being eaten
+      - Test rapid dot collection scenarios (no skipped scoring)
+      - Validate fruit despawning after timeout period
+      - Performance test: ensure smooth gameplay with score updates
       
-      # Installation & Setup
-      - Prerequisites and dependencies
-      - How to download/clone the game
-      - Running locally (python3 -m http.server)
-      - Browser compatibility notes
+      **Edge Case Testing:**
+      - Test simultaneous dot collection scenarios
+      - Verify score accuracy with rapid movement through dot clusters
+      - Test level transition when final dot is collected
+      - Validate score display with large numbers (100k+ points)
       
-      # How to Play
-      - Game controls (Arrow keys/WASD)
-      - Objective and win conditions
-      - Scoring system explanation
-      - Ghost behaviors and strategies
-      - Power-up mechanics
-      - Level progression
+      **Deliverables:**
+      - Fully functional dot collection system
+      - Complete scoring mechanism with persistent high scores
+      - Working level completion detection
+      - Bonus fruit system with timing mechanics
+      - Solid foundation for ghost interactions
       
-      # Customization Guide
-      - Modifying maze layouts (maze editor tips)
-      - Adjusting difficulty settings
-      - Changing ghost AI parameters
-      - Customizing sprites and colors
-      - Adding new sound effects
-      - Creating custom levels
+      **Success Criteria:** All dots can be collected perfectly, scoring is accurate, and level completion works flawlessly before implementing ghost AI.
+
+  - content: Ghost AI & Pathfinding System
+    description: |
+      **Implement all 4 ghosts with unique AI behaviors and pathfinding:**
       
-      # Code Structure
-      - File organization overview
-      - Key classes: Game, Player, Ghost, Maze
-      - Game loop explanation
-      - AI algorithm details
-      - Collision detection system
+      **Core Ghost Infrastructure:**
+      - Create Ghost base class with position, direction, and state management
+      - Implement ghost sprites and animations for all 4 ghosts
+      - Add ghost movement system using same grid as player
+      - Create ghost house positioning and exit timing logic
+      - Implement ghost state machine (scatter, chase, frightened, eaten)
       
-      # Testing Results & Quality Assurance
-      - Browser compatibility matrix (tested versions)
-      - Performance benchmarks (fps, memory usage, load times)
-      - Known limitations and workarounds
-      - Test coverage summary for all game features
-      - User acceptance testing feedback
-      - Accessibility compliance status
+      **Individual Ghost AI Personalities:**
+      - **Blinky (Red Ghost - "Shadow")**: Direct aggressive chase behavior
+        * Always targets player's current position
+        * Fastest ghost, becomes even faster as dots decrease
+        * Exits ghost house immediately at level start
       
-      # Enhancement Ideas
-      - Add two-player mode
-      - Create online leaderboards
-      - Implement save states
-      - Add new ghost types
-      - Create bonus stages
-      - Mobile touch controls
-      - Level editor tool
-      - Multiplayer networking
-      - Achievement system
-      - Custom maze generator
+      - **Pinky (Pink Ghost - "Speedy")**: Ambush behavior
+        * Targets 4 tiles ahead of player's current direction
+        * Creates tactical positioning to cut off player
+        * Exits ghost house after brief delay
       
-      # Troubleshooting & Support
-      - Common issues and fixes (based on testing findings)
-      - Browser-specific compatibility issues
-      - Performance optimization tips
-      - Debug mode instructions
-      - Audio/video troubleshooting
-      - Input lag solutions
-      - Frame rate optimization
-      - Memory leak prevention
-      - Mobile device issues
-      - LocalStorage problems
+      - **Inky (Cyan Ghost - "Bashful")**: Unpredictable behavior  
+        * Uses both player position AND Blinky's position for targeting
+        * Most complex AI - creates surprising movement patterns
+        * Exits ghost house after more dots are eaten
       
-      Make this documentation user-friendly and comprehensive!
+      - **Clyde (Orange Ghost - "Pokey")**: Shy behavior
+        * Chases player when far away (8+ tiles)
+        * Retreats to bottom-left corner when close
+        * Creates hit-and-run attack patterns
+        * Last to exit ghost house
+      
+      **Pathfinding & Navigation:**
+      - Implement A* pathfinding algorithm for ghost navigation
+      - Add mode switching: scatter mode (30 seconds) vs chase mode
+      - Create smart turning system (no 180-degree reversals except when required)
+      - Implement tunnel navigation for ghosts
+      - Add intersection decision making based on target tiles
+      - Create ghost house entry/exit pathfinding
+      
+      **Advanced AI Features:**
+      - Implement ghost speed variations by level and mode
+      - Add ghost coordination to prevent overlapping
+      - Create dynamic difficulty scaling (ghosts get smarter/faster)
+      - Implement ghost prediction system (anticipate player movement)
+      
+      **Comprehensive AI Testing & Validation:**
+      - Test each ghost's unique behavior in isolation
+      - Verify Blinky directly chases player in all scenarios
+      - Confirm Pinky targets ahead of player movement correctly
+      - Test Inky's complex targeting using Blinky's position
+      - Validate Clyde's distance-based behavior switching
+      - Test pathfinding in all maze areas including dead ends
+      - Verify ghosts can navigate tunnels properly
+      - Test mode switching between scatter and chase
+      - Confirm ghosts exit ghost house in correct order and timing
+      - Test ghost collision with walls and boundaries
+      - Validate smooth ghost movement and turning
+      - Performance test: all 4 ghosts running AI simultaneously at 60fps
+      
+      **Integration Testing:**
+      - Test ghost-player interactions (collision detection)
+      - Verify ghosts respond correctly to player position changes
+      - Test ghost behavior when player uses tunnels
+      - Confirm ghosts maintain appropriate difficulty curve
+      - Test ghost AI in various player movement scenarios
+      
+      **Deliverables:**
+      - 4 fully functional ghosts with distinct AI personalities
+      - Complete pathfinding system for intelligent navigation
+      - Working ghost house management and exit timing
+      - Mode-based AI behavior (scatter vs chase)
+      - Solid foundation for power pellet interactions
+      
+      **Success Criteria:** All 4 ghosts move intelligently with unique behaviors, pathfinding works perfectly throughout the maze, and AI provides appropriate challenge level before implementing power-up mechanics.
+
+  - content: Power-ups & Ghost Interactions
+    description: |
+      **Implement power pellet mechanics and ghost state management:**
+      
+      **Power Pellet System:**
+      - Create power pellet activation when player collects them
+      - Implement vulnerability timer (starts at 10 seconds, decreases with level)
+      - Add power pellet effect visual indicators and sounds
+      - Create countdown warning system (flashing when almost expired)
+      - Implement multiple power pellet collection (timer resets)
+      
+      **Ghost State Management:**
+      - **Frightened State**: All ghosts turn blue and move slowly
+        * Reverse direction immediately when power pellet activated
+        * Use random/simplified AI (less intelligent pathfinding)
+        * Flash blue/white when vulnerability is about to end
+        * Move at 50% normal speed
+      
+      - **Normal State**: Standard chase/scatter behavior
+        * Resume individual AI personalities
+        * Return to previous movement patterns
+        * Restore normal movement speed
+      
+      - **Eaten State**: Ghost becomes eyes only
+        * Move at double speed toward ghost house
+        * Pass through other ghosts without collision
+        * Ignore player collision while returning
+        * Regenerate to normal state when reaching ghost house
+      
+      **Ghost Eating Mechanics:**
+      - Implement ghost-player collision detection during vulnerability
+      - Create scoring progression: 200, 400, 800, 1600 points per ghost
+      - Add ghost eating sound effects and visual feedback
+      - Reset scoring progression when power pellet effect ends
+      - Implement eye animation for eaten ghosts returning home
+      
+      **Player-Ghost Collision System:**
+      - **Normal Mode**: Ghost kills player (death sequence)
+      - **Frightened Mode**: Player eats ghost (score points)
+      - **Eyes Mode**: No collision (ghost returning home)
+      - Implement precise collision detection (grid-based)
+      - Add collision prediction to prevent overlap issues
+      
+      **Lives System:**
+      - Implement 3 lives to start, extra life at 10,000 points
+      - Create death animation and respawn mechanics
+      - Add life display on game screen
+      - Implement game over detection (no lives remaining)
+      - Create ready screen between lives
+      
+      **Comprehensive System Integration Testing:**
+      - Test power pellet collection and ghost state changes
+      - Verify all 4 ghosts enter frightened mode simultaneously
+      - Test ghost eating and scoring progression (200→400→800→1600)
+      - Validate eaten ghost eyes returning to ghost house correctly
+      - Test power pellet timer and warning flash system
+      - Confirm ghost state restoration when timer expires
+      - Test multiple power pellet scenarios (overlapping effects)
+      - Verify player death and respawn mechanics
+      - Test lives system and game over detection
+      - Validate collision detection accuracy in all ghost states
+      
+      **Edge Case Testing:**
+      - Test eating ghost just as power pellet expires
+      - Verify collision detection at tunnel entrances
+      - Test simultaneous ghost collisions
+      - Validate ghost house re-entry and regeneration
+      - Test rapid power pellet collection scenarios
+      - Confirm proper state management with level transitions
+      
+      **Performance & Balance Testing:**
+      - Ensure all interactions maintain 60fps performance
+      - Test difficulty curve feels appropriate and fun
+      - Validate power pellet timing provides strategic gameplay
+      - Confirm ghost vulnerability duration feels balanced
+      - Test extended gameplay sessions for stability
+      
+      **Deliverables:**
+      - Complete power pellet system with ghost vulnerability
+      - Full ghost state management (normal, frightened, eaten)
+      - Working player-ghost collision system
+      - Lives system with death/respawn mechanics
+      - Balanced and fun gameplay mechanics
+      
+      **Success Criteria:** All ghost interactions work perfectly, power pellets create strategic gameplay opportunities, and the game provides appropriate challenge and reward balance before adding visual polish.
+
+  - content: Visual Effects & Audio System
+    description: |
+      **Create polished retro arcade presentation and audio:**
+      
+      **Visual Effects & Animations:**
+      - Implement pixel-perfect sprite animations for all characters
+      - Create smooth movement interpolation for grid-based motion
+      - Add death animations for both player and ghosts
+      - Implement ghost state transition animations (normal↔frightened)
+      - Create particle effects for dot collection and power pellet activation
+      - Add screen flash effects for power-up activation
+      - Implement score popup animations with retro font styling
+      - Create bonus fruit collection visual feedback
+      - Add level transition effects and intermission screens
+      
+      **Retro Arcade Styling:**
+      - Apply classic arcade color palette (vibrant blues, yellows, reds)
+      - Implement CRT monitor effect overlay (optional scanlines)
+      - Add retro pixel fonts for UI elements and scores
+      - Create arcade cabinet border styling around game area
+      - Implement attract mode demo animation when idle
+      - Add authentic arcade-style UI elements (lives, score, level)
+      - Create retro loading screen with classic aesthetics
+      
+      **Comprehensive Audio System:**
+      - **Player Sounds**: Classic "wakka-wakka" eating sound loop
+      - **Ghost Sounds**: Siren that increases in pitch with tension
+      - **Power-up Audio**: Power pellet activation sound with echo effect
+      - **Action Sounds**: Ghost eating chomping sound with pitch variation
+      - **Death Audio**: Classic death jingle for losing a life
+      - **Level Audio**: Completion fanfare and level start sound
+      - **Bonus Audio**: Fruit collection sounds (different pitch per fruit)
+      - **Ambient Audio**: Background music with authentic arcade feel
+      - **UI Audio**: Menu navigation sounds and button feedback
+      
+      **Audio Management:**
+      - Implement Web Audio API for high-quality sound playback
+      - Create audio sprite system for efficient sound loading
+      - Add volume controls (master, effects, music)
+      - Implement mute functionality with visual indicator
+      - Create audio settings persistence (LocalStorage)
+      - Add browser audio permission handling
+      - Optimize audio loading for fast game startup
+      
+      **Advanced Visual Features:**
+      - Implement sprite animation system with frame timing
+      - Create dynamic lighting effects for power pellets
+      - Add maze wall rendering with depth and texture
+      - Implement smooth camera following (if needed)
+      - Create visual feedback for all player actions
+      - Add performance optimization for visual effects
+      
+      **Testing & Validation:**
+      - Test all animations run smoothly at 60fps
+      - Verify audio plays correctly in all browsers
+      - Test volume controls and mute functionality
+      - Validate visual effects don't impact game performance
+      - Test audio synchronization with game events
+      - Confirm retro aesthetic matches arcade authenticity
+      - Test on various screen sizes and resolutions
+      - Validate audio loading doesn't delay game startup
+      - Test accessibility features (colorblind-friendly palette)
+      - Verify all visual feedback enhances gameplay clarity
+      
+      **Audio Quality Testing:**
+      - Test audio in different browser environments
+      - Verify no audio distortion or clipping
+      - Test audio fallbacks for unsupported formats
+      - Validate audio timing accuracy with game events
+      - Test audio performance with multiple simultaneous sounds
+      
+      **Deliverables:**
+      - Complete visual effects system with smooth animations
+      - Full retro arcade audio implementation
+      - Polished UI with authentic arcade styling
+      - Optimized performance with all visual/audio features
+      - Enhanced gameplay experience through audiovisual feedback
+      
+      **Success Criteria:** Game looks and sounds like authentic retro arcade experience while maintaining perfect performance and enhancing gameplay clarity before implementing final game states.
+
+  - content: Game States & Final Integration
+    description: |
+      **Create complete game flow and comprehensive final testing:**
+      
+      **Game State Management:**
+      - **Start Screen**: Attract mode with demo gameplay, high score display
+      - **Ready Screen**: "READY!" message before each life/level
+      - **Playing State**: Active gameplay with pause functionality
+      - **Paused State**: Game pause with resume capability
+      - **Level Complete**: Brief celebration and level transition
+      - **Death State**: Player death animation and life deduction
+      - **Game Over**: Final score display with high score checking
+      - **Settings Menu**: Audio, difficulty, and control options
+      
+      **User Interface Systems:**
+      - Create main menu with navigation (Start, High Scores, Settings, Credits)
+      - Implement in-game HUD (Score, Lives, Level, High Score)
+      - Add pause menu with resume/restart/quit options
+      - Create settings screen with volume sliders and control mapping
+      - Implement high score entry screen with name input
+      - Add how-to-play instructions with visual demonstrations
+      - Create credits screen with development acknowledgments
+      
+      **Level Progression System:**
+      - Implement multiple level progression with increasing difficulty
+      - Add ghost speed increases by level (5% per level up to max)
+      - Decrease power pellet duration as levels advance
+      - Implement bonus life at 10,000 and 100,000 points
+      - Create level transition animations and intermissions
+      - Add level indicator display and progression tracking
+      
+      **Final Features & Polish:**
+      - Implement comprehensive save/load system for progress
+      - Add keyboard shortcut support (spacebar pause, R restart)
+      - Create responsive design for different screen sizes
+      - Implement full-screen mode toggle
+      - Add performance monitoring and frame rate display (debug mode)
+      - Create cheat code system for testing (optional)
+      
+      **Comprehensive End-to-End Testing:**
+      
+      **Complete Gameplay Testing:**
+      - Full playthrough from start screen to game over (multiple times)
+      - Test all menu navigation and state transitions
+      - Verify level progression and difficulty scaling works correctly
+      - Test pause/resume functionality during intense gameplay
+      - Validate high score system with actual gameplay scores
+      - Test bonus life awards at correct point thresholds
+      - Confirm game can be completed through multiple levels
+      
+      **Cross-Browser Compatibility:**
+      - Test thoroughly in Chrome, Firefox, Safari, Edge
+      - Verify consistent performance across all browsers
+      - Test audio compatibility and fallbacks
+      - Validate visual rendering accuracy across browsers
+      - Test input handling consistency
+      - Confirm LocalStorage functionality works universally
+      
+      **Performance & Stability Testing:**
+      - Extended gameplay sessions (30+ minutes) without issues
+      - Memory usage monitoring (no memory leaks)
+      - Frame rate consistency testing under various conditions
+      - Audio performance with multiple simultaneous sounds
+      - Large score number handling (999,999+ points)
+      - Browser tab switching and focus loss/regain behavior
+      
+      **User Experience Testing:**
+      - Control responsiveness testing (no input lag)
+      - Menu usability and navigation flow
+      - Volume control functionality and audio balance
+      - Screen reader compatibility (basic accessibility)
+      - Touch device compatibility (if applicable)
+      - Learning curve assessment (game is fun and learnable)
+      
+      **Edge Case & Stress Testing:**
+      - Rapid input combinations and key mashing
+      - Browser refresh during gameplay (state persistence)
+      - Network connectivity changes (offline capability)
+      - System resource limitations (low-end devices)
+      - Unusual screen resolutions and aspect ratios
+      - Extended pause periods and resume functionality
+      
+      **Documentation Creation:**
+      - Create comprehensive GAME_README.md with:
+        * Installation and setup instructions
+        * Complete how-to-play guide with strategies
+        * Browser compatibility matrix with tested versions
+        * Performance benchmarks and system requirements
+        * Troubleshooting guide for common issues
+        * Code architecture overview for developers
+        * Testing results summary and known limitations
+        * Enhancement roadmap and customization guide
+      
+      **Quality Assurance Checklist:**
+      - [ ] All movement mechanics work perfectly
+      - [ ] Collision detection has zero bugs
+      - [ ] All 4 ghost AIs behave correctly and uniquely
+      - [ ] Power pellet system functions flawlessly
+      - [ ] Scoring system is accurate and persistent
+      - [ ] Audio plays correctly in all situations
+      - [ ] Visual effects enhance gameplay without lag
+      - [ ] All game states transition smoothly
+      - [ ] Cross-browser compatibility confirmed
+      - [ ] Performance maintains 60fps consistently
+      - [ ] Game is fun, balanced, and addictive
+      - [ ] Documentation is complete and helpful
+      
+      **Deliverables:**
+      - Complete, polished Pac-Man game ready for release
+      - Full game state management and UI system
+      - Comprehensive documentation and troubleshooting guide
+      - Proven cross-browser compatibility
+      - Performance-optimized codebase
+      - Fun, authentic arcade gameplay experience
+      
+      **Success Criteria:** Game is completely functional, thoroughly tested, well-documented, and provides an authentic, enjoyable Pac-Man experience that works flawlessly across all target platforms and browsers.
